@@ -1,9 +1,12 @@
 const express = require('express')
 const validation = require('./Validations/RequestValidations')
+const myCustomMiddleware = require('./middleware')
 const mongo = require("mongoose")
 const app = express()
 const port = 3000
 app.use(express.json());
+
+app.use(myCustomMiddleware)
 
 // mongo db connection
 const mongoDb = "mongodb://localhost:27017/tasks"
@@ -30,8 +33,8 @@ if(validationRes === true){
   task.save()
   console.log("after saving data in the db")
   console.log("the request body is : ", task.status,task.description,task.user,task.title)
-  if(res.status(200).send({ message: "everything is ok" })){
-    console.log("every thing is ok")
+  if(res.status(200).send({ message: "A task was created" })){
+    console.log("A task was created")
   }
   else{
     console.log("something went wrong")
@@ -84,6 +87,25 @@ app.post('/update-task/:id/:status', async (req, res) => {
     res.status(500).send({ message: "Error updating task", error });
   }
 });
+
+// get all items
+app.get('/get-all-tasks',async(req,res) =>{
+
+console.log("before getting all the items")
+try{
+  const result = await Task.find();
+  if(result.matchedCount === 0){
+    return res.status(400).send({message:"nothing was found"})
+  }
+  res.status(200).send({message:"All items were found.",result})
+  console.log("the items",result)
+
+}
+catch (error) {
+  console.error("Error getting all  tasks:", error);
+  res.status(500).send({ message: "Error getting tasks", error });
+}
+})
 
 
 async function ConnectToDb(){
