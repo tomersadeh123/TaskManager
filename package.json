@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "npm run test"
+    "test": "jest"
   },
   "author": "tomer",
   "license": "ISC",
@@ -11,5 +11,10 @@
   "dependencies": {
     "express": "^5.1.0",
     "mongoose": "^8.16.1"
+  },
+  "devDependencies": {
+    "jest": "^30.0.4",
+    "mongodb-memory-server": "^10.1.4",
+    "supertest": "^7.1.1"
   }
 }

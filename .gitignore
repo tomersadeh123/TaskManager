@@ -1,0 +1,34 @@
+# Node dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# dotenv environment files
+.env
+.env.*  # e.g. .env.development
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor folders
+.vscode/
+.idea/
+
+# Build/output
+dist/
+build/
+
+# TypeScript
+*.tsbuildinfo
+
+# Coverage/test reports
+coverage/
+.nyc_output/
+
+# Optional: system-specific or sensitive files
+*.pem
+*.key
