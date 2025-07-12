@@ -2,6 +2,7 @@ const express = require('express');
 const validation = require('./Validations/RequestValidations');
 const myCustomMiddleware = require('./middleware');
 const mongoose = require('mongoose');
+const userValidation = require("./Validations/UserValidations");
 
 const app = express();
 app.use(express.json());
@@ -15,15 +16,26 @@ const TaskSchema = new mongoose.Schema({
 });
 const Task = mongoose.model('task', TaskSchema, 'task');
 
-app.post('/create-task', async (req, res) => {
-  console.log("🔥 stating");
-  const validationRes = validation(req);
-  console.log("✅ validation result:", validationRes);
+const UserSchema = new mongoose.Schema({
+  userName: String,
+  password: String,
+  email: String,
+  address: String
+});
+const User = mongoose.model('Users', UserSchema, 'Users');
 
-  if (validationRes === true) {
+app.post('/create-task', async (req, res) => {
+  console.log("🔥 Starting create-task");
+
+  const validationRes = validation(req);
+  console.log("✅ Validation result:", validationRes);
+
+
+  if (validationRes.isValid) {
+    console.log("✅ Validation passed - entering success branch");
     try {
-      console.log("💾 About to save task:", req.body);
-      const task = new Task(req.body);
+      console.log("💾 About to save task:", validationRes.data);
+      const task = new Task(validationRes.data);
       await task.save();
       console.log("✅ Task saved.");
       res.status(200).send({ message: "A task was created" });
@@ -32,8 +44,8 @@ app.post('/create-task', async (req, res) => {
       res.status(400).send({ message: "Failed to save task" });
     }
   } else {
-    console.log("❌ Validation failed:", validationRes);
-    res.status(400).send({ message: "Invalid data" });
+    console.log("❌ Validation errors:", validationRes.errors);
+    res.status(400).send({ message: "Invalid data", errors: validationRes.errors });
   }
 });
 
@@ -73,10 +85,32 @@ app.get('/get-all-tasks', async (req, res) => {
   }
 });
 
-app.post('/test', (req, res) => {
-  console.log("🔥 /test hit");
-  res.send({ message: "Test route hit successfully" });
+app.post('/health', (res) => {
+  try{
+    res.status(200).send({ message: "Server is healthy" });
+  }catch (error){
+    res.status(500).send({ message: "Server is not healthy" });
+  }
 });
 
+
+app.post('create-user',async (req,res) => {
+  var validationRes = userValidation(req);
+  console.log("Validations Result",validationRes)
+  if(validationRes.isValid){
+    try{
+      const user = new User(req.body);
+      await user.save();
+      console.log("✅ Task saved.");
+      res.status(200).send({ message: "User created" });
+    }catch (e) {
+      res.status(500).send({message: "something wen wrong"});
+    }
+  }
+  else {
+    console.log("❌ Validation failed:", validationRes);
+    res.status(400).send({ message: "Invalid data" ,validationRes});
+  }
+});
 
 module.exports = app;

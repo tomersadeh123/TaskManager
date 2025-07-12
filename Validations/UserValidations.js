@@ -1,13 +1,13 @@
 const Joi = require('joi');
 
 const schema = Joi.object().keys({
-    title: Joi.string().min(3).max(30).required(),
-    description: Joi.string().min(3).max(30),
-    user: Joi.string().min(3).max(30),
-    status: Joi.string().min(3).max(30),
+    UserName: Joi.string().min(3).max(30).required(),
+    Password: Joi.string().min(6).max(50),
+    Email: Joi.string().email().required(),
+    Address: Joi.string().min(3).max(100),
 });
 
-function validation(request) {
+function userValidation(request) {
     const { error, value } = schema.validate(request.body, {
         abortEarly: false,
         stripUnknown: true
@@ -21,5 +21,4 @@ function validation(request) {
     return { isValid: true, data: value };
 }
 
-
-module.exports = validation;
+module.exports = userValidation;
