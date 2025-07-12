@@ -25,6 +25,9 @@ jobs:
       - name: 🧪 Run Tests
         run: npm test
 
+      - name: Build Docker image
+        run: docker build -t nodeJsProject .
+
     # - name: 🐳 Build Docker Image (optional)
     #   run: docker build -t my-node-app .
 
