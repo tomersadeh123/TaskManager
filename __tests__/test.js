@@ -1,7 +1,12 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
-jest.mock('../Validations/RequestValidations', () => jest.fn(() => true));
+
+// Fix: Mock to return the new validation format
+jest.mock('../Validations/RequestValidations', () => jest.fn((req) => ({
+  isValid: true,
+  data: req.body  // Return the request body as validated data
+})));
 
 const app = require('../app');
 let mongoServer;
@@ -29,13 +34,13 @@ afterEach(async () => {
 
 test('POST /create-task - success', async () => {
   const res = await request(app)
-    .post('/create-task')
-    .send({
-      title: 'Test Task',
-      description: 'Description',
-      user: 'User',
-      status: 'Pending'
-    });
+      .post('/create-task')
+      .send({
+        title: 'Test Task',
+        description: 'Description',
+        user: 'User',
+        status: 'Pending'
+      });
   expect(res.statusCode).toBe(200);
   expect(res.body.message).toBe('A task was created');
 });
@@ -101,3 +106,52 @@ test('POST /update-task/:id/:status - success', async () => {
   const updated = await request(app).get('/get-all-tasks');
   expect(updated.body.result[0].status).toBe('Done');
 });
+
+// Add test for validation failure
+test('POST /create-task - validation failure', async () => {
+  // Temporarily mock validation to return failure
+  const validation = require('../Validations/RequestValidations');
+  validation.mockImplementation(() => ({
+    isValid: false,
+    errors: [{ message: 'Title is required' }]
+  }));
+
+  const res = await request(app)
+      .post('/create-task')
+      .send({
+        title: '', // Invalid data
+        description: 'Description',
+        user: 'User',
+        status: 'Pending'
+      });
+
+  expect(res.statusCode).toBe(400);
+  expect(res.body.message).toBe('Invalid data');
+
+  // Reset mock for other tests
+  validation.mockImplementation((req) => ({
+    isValid: true,
+    data: req.body
+  }));
+});
+
+// Add test for create-user endpoint
+/**test('POST /create-user - success', async () => {
+  // Mock user validation
+  jest.mock('../Validations/UserValidations', () => jest.fn((req) => ({
+    isValid: true,
+    data: req.body
+  })));
+
+  const res = await request(app)
+      .post('/create-user')
+      .send({
+        UserName: 'testuser',
+        Password: 'password123',
+        Email: 'test@example.com',
+        Address: '123 Test St'
+      });
+
+  expect(res.statusCode).toBe(200);
+  expect(res.body.message).toBe('User created');
+});**/
