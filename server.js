@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const app = require('./app');
 
 async function start() {
-  const uri = process.env.MONGO_URI || "mongodb+srv://tomersad:g7OVdtS4o7F1q7km@taskmanager.fqjiug7.mongodb.net/tasks";
+  const uri = process.env.MONGO_URI;
   if (!uri) {
     console.error('❌ MONGO_URI not set in environment');
     process.exit(1);
