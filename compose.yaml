@@ -13,7 +13,7 @@ services:
       context: .
     environment:
       NODE_ENV: production
-      MONGO_URI: mongodb://mongo:27017/tasks
+      MONGO_URI: mongodb+srv://tomersad:g7OVdtS4o7F1q7km@taskmanager.fqjiug7.mongodb.net/tasks
     ports:
       - 3000:3000
     depends_on:

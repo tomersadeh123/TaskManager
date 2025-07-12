@@ -1,13 +1,21 @@
-const app = require('./app');
+require('dotenv').config();
+
 const mongoose = require('mongoose');
+const app = require('./app');
 
 async function start() {
+  const uri = process.env.MONGO_URI || "mongodb+srv://tomersad:g7OVdtS4o7F1q7km@taskmanager.fqjiug7.mongodb.net/tasks";
+  if (!uri) {
+    console.error('❌ MONGO_URI not set in environment');
+    process.exit(1);
+  }
+
   try {
-    await mongoose.connect('mongodb://localhost:27017/tasks');
-    console.log('Connected to Db');
-    app.listen(3000, () => console.log('Server listening on port 3000'));
+    await mongoose.connect(uri);
+    console.log('✅ Connected to DB');
+    app.listen(3000, () => console.log('🚀 Server listening on port 3000'));
   } catch (err) {
-    console.error('Could not connect', err);
+    console.error('❌ Could not connect to DB:', err);
   }
 }
 
