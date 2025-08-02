@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGO_URI!;
+const MONGODB_URI = process.env.MONGO_URI;
 
-if (!MONGODB_URI) {
+if (!MONGODB_URI && process.env.NODE_ENV !== 'production') {
   throw new Error('Please define the MONGO_URI environment variable');
 }
 
@@ -18,6 +18,10 @@ if (!cached) {
 }
 
 async function connectDB() {
+  if (!MONGODB_URI) {
+    throw new Error('Please define the MONGO_URI environment variable');
+  }
+
   if (cached!.conn) {
     return cached!.conn;
   }
