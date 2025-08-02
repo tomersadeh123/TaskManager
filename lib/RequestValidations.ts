@@ -6,7 +6,7 @@ const schema = Joi.object().keys({
     status: Joi.string().min(3).max(30),
 });
 
-function validation(request: { body: any }) {
+function validation(request: { body: Record<string, unknown> }) {
     const { error, value } = schema.validate(request.body, {
         abortEarly: false,
         stripUnknown: true
