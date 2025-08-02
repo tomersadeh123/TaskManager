@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { signToken } from '@/utils/jwt';
-import { withLogging } from '@/lib/logger';
 
-async function loginHandler(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
+    // Log the request
+    console.log('Request received: POST /api/auth/login');
+    
     await connectDB();
     
     const { userName, password } = await request.json();
@@ -31,12 +33,10 @@ async function loginHandler(request: NextRequest) {
       token,
       user: { id: user._id, userName: user.userName }
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { message: 'Server error' },
       { status: 500 }
     );
   }
 }
-
-export const POST = withLogging(loginHandler);

@@ -3,10 +3,12 @@ import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { signToken } from '@/utils/jwt';
 import userValidation from '@/lib/UserValidations';
-import { withLogging } from '@/lib/logger';
 
-async function registerHandler(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
+    // Log the request
+    console.log('Request received: POST /api/auth/register');
+    
     await connectDB();
     
     const body = await request.json();
@@ -28,8 +30,8 @@ async function registerHandler(request: NextRequest) {
       { message: 'User created', token },
       { status: 201 }
     );
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error) {
+    if ((error as { code?: number }).code === 11000) {
       return NextResponse.json(
         { message: 'Username or email already exists' },
         { status: 400 }
@@ -41,5 +43,3 @@ async function registerHandler(request: NextRequest) {
     );
   }
 }
-
-export const POST = withLogging(registerHandler);

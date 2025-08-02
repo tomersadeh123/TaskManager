@@ -3,14 +3,15 @@ import connectDB from '@/lib/db';
 import Task from '@/models/task';
 import { verifyToken } from '@/utils/jwt';
 import User from '@/models/User';
-import { withLogging } from '@/lib/logger';
 
 // DELETE /api/tasks/[id] - Delete task
-async function deleteTaskHandler(
+export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const resolvedParams = await params;
+    console.log(`Request received: DELETE /api/tasks/${resolvedParams.id}`);
     await connectDB();
     
     // Get token from header
@@ -26,23 +27,25 @@ async function deleteTaskHandler(
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }
 
-    const result = await Task.deleteOne({ _id: params.id, user: user._id });
+    const result = await Task.deleteOne({ _id: resolvedParams.id, user: user._id });
     if (result.deletedCount === 0) {
       return NextResponse.json({ message: "Task not found" }, { status: 404 });
     }
     
     return NextResponse.json({ message: "The task has been successfully deleted" });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
 
 // PUT /api/tasks/[id] - Update task
-async function updateTaskHandler(
+export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const resolvedParams = await params;
+    console.log(`Request received: PUT /api/tasks/${resolvedParams.id}`);
     await connectDB();
     
     // Get token from header
@@ -60,7 +63,7 @@ async function updateTaskHandler(
 
     const body = await request.json();
     const result = await Task.updateOne(
-      { _id: params.id, user: user._id },
+      { _id: resolvedParams.id, user: user._id },
       body
     );
     
@@ -69,10 +72,7 @@ async function updateTaskHandler(
     }
     
     return NextResponse.json({ message: "The task has been successfully updated" });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
-
-export const DELETE = withLogging(deleteTaskHandler);
-export const PUT = withLogging(updateTaskHandler);

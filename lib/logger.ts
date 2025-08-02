@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-export async function logRequest(request: NextRequest, body?: any) {
+export async function logRequest(request: NextRequest, body?: Record<string, unknown>) {
   const method = request.method;
   const url = request.nextUrl.pathname;
   
@@ -8,15 +8,15 @@ export async function logRequest(request: NextRequest, body?: any) {
 }
 
 // Wrapper for API route handlers that includes logging
-export function withLogging(handler: (request: NextRequest, context?: any) => Promise<Response>) {
-  return async (request: NextRequest, context?: any) => {
+export function withLogging(handler: (request: NextRequest, context?: { params: Record<string, string> }) => Promise<Response>) {
+  return async (request: NextRequest, context?: { params: Record<string, string> }) => {
     let body;
     
     // Only try to parse body for POST/PUT requests
     if (request.method === 'POST' || request.method === 'PUT') {
       try {
         body = await request.clone().json();
-      } catch (e) {
+      } catch {
         // Body might not be JSON, that's okay
       }
     }
