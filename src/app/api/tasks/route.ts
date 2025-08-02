@@ -4,11 +4,11 @@ import Task from '@/models/task';
 import { verifyToken } from '@/utils/jwt';
 import User from '@/models/User';
 import validation from '@/lib/RequestValidations';
-import { withLogging } from '@/lib/logger';
 
 // GET /api/tasks - Get all tasks for authenticated user
-async function getTasksHandler(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
+    console.log('Request received: GET /api/tasks');
     await connectDB();
     
     // Get token from header
@@ -26,14 +26,15 @@ async function getTasksHandler(request: NextRequest) {
 
     const tasks = await Task.find({ user: user._id });
     return NextResponse.json({ message: "All items were found.", result: tasks });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ message: 'Invalid token' }, { status: 401 });
   }
 }
 
 // POST /api/tasks - Create new task
-async function createTaskHandler(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
+    console.log('Request received: POST /api/tasks');
     await connectDB();
     
     // Get token from header
@@ -68,10 +69,7 @@ async function createTaskHandler(request: NextRequest) {
         { status: 400 }
       );
     }
-  } catch (error) {
+  } catch {
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
-
-export const GET = withLogging(getTasksHandler);
-export const POST = withLogging(createTaskHandler);
