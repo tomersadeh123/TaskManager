@@ -1,23 +1,34 @@
 {
-  "name": "nodejsproject",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "task-management-app",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "test": "jest"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
-  "author": "tomer",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
-    "dotenv": "^17.2.0",
-    "express": "^5.1.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/joi": "^17.2.2",
+    "@types/jsonwebtoken": "^9.0.10",
+    "bcryptjs": "^3.0.2",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.16.1"
+    "mongoose": "^8.17.0",
+    "next": "15.4.5",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   },
   "devDependencies": {
-    "jest": "^30.0.4",
-    "mongodb-memory-server": "^10.1.4",
-    "supertest": "^7.1.1"
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.4.5",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
