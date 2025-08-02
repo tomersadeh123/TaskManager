@@ -7,7 +7,7 @@ const schema = Joi.object().keys({
     address: Joi.string().min(3).max(100),
 });
 
-export default function userValidation(request: { body: any }) {
+export default function userValidation(request: { body: Record<string, unknown> }) {
     const { error, value } = schema.validate(request.body, {
         abortEarly: false,
         stripUnknown: true

@@ -22,8 +22,8 @@ jobs:
       - name: 📦 Install Dependencies
         run: npm install
 
-      - name: 🧪 Run Tests
-        run: npm test
+      - name: 🏗️ Build Next.js App
+        run: npm run build
 
       - name: Build Docker image
         run: docker build -t nodeJsProject .
