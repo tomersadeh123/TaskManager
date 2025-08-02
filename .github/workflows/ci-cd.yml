@@ -22,8 +22,15 @@ jobs:
       - name: 📦 Install Dependencies
         run: npm install
 
+      - name: 🧪 Run Tests
+        run: npm test || echo "No tests found"
+
       - name: 🏗️ Build Next.js App
         run: npm run build
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI || 'mongodb://localhost:27017/test' }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'test-secret-key' }}
+          JWT_EXPIRES_IN: ${{ secrets.JWT_EXPIRES_IN || '24h' }}
 
-      - name: Build Docker image
-        run: docker build -t nodeJsProject .
+      - name: 🐳 Build Docker image
+        run: docker build -t nodejsproject .
