@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
 
     const tasks = await Task.find({ user: user._id });
     return NextResponse.json({ message: "All items were found.", result: tasks });
-  } catch {
+  } catch (error) {
+    console.error('Tasks GET error:', error);
     return NextResponse.json({ message: 'Invalid token' }, { status: 401 });
   }
 }
@@ -69,7 +70,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-  } catch {
+  } catch (error) {
+    console.error('Tasks POST error:', error);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }

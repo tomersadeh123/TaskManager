@@ -5,7 +5,13 @@ const UserSchema = new mongoose.Schema({
   userName: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  address: String
+  address: String,
+  bio: String,
+  avatar: String, // Cloudinary URL
+  timezone: String,
+  theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
+  emailNotifications: { type: Boolean, default: true },
+  pushNotifications: { type: Boolean, default: true }
 });
 
 // Hash password before saving

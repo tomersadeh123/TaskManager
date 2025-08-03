@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
       token,
       user: { id: user._id, userName: user.userName }
     });
-  } catch {
+  } catch (error) {
+    console.error('Login error:', error);
     return NextResponse.json(
       { message: 'Server error' },
       { status: 500 }
