@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, DollarSign, Calendar, AlertTriangle } from 'lucide-react';
 import BillList from '@/components/household/BillList';
 import BillForm from '@/components/household/BillForm';
+import { clientLogger } from '@/lib/client-logger';
 
 interface Bill {
   _id: string;
@@ -24,7 +25,6 @@ interface Bill {
 export default function BillsPage() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<{ id: string; userName: string } | null>(null);
   const router = useRouter();
 
   const fetchBills = useCallback(async () => {
@@ -53,15 +53,10 @@ export default function BillsPage() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
     
     if (!token) {
       router.push('/login');
       return;
-    }
-
-    if (userData) {
-      setUser(JSON.parse(userData));
     }
 
     fetchBills();
@@ -88,8 +83,9 @@ export default function BillsPage() {
         },
         body: JSON.stringify(billData)
       });
-
+      
       if (response.ok) {
+       clientLogger.info('Bill created:', billData);
         fetchBills();
       }
     } catch (error) {
@@ -110,6 +106,7 @@ export default function BillsPage() {
       });
 
       if (response.ok) {
+        clientLogger.info('Bill Updated:', updates);
         fetchBills();
       }
     } catch (error) {

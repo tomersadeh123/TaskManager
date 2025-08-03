@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { logger } from './logger';
 
 const MONGODB_URI = process.env.MONGO_URI;
 
@@ -18,29 +19,42 @@ if (!cached) {
 }
 
 async function connectDB() {
+  const startTime = Date.now();
+  
   if (!MONGODB_URI) {
-    throw new Error('Please define the MONGO_URI environment variable');
+    const error = new Error('Please define the MONGO_URI environment variable');
+    logger.error('MongoDB URI not configured', error);
+    throw error;
   }
 
-  // Check connection state
-  console.log('MongoDB connection state:', mongoose.connection.readyState);
-  // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+  const connectionState = mongoose.connection.readyState;
+  const stateMapping: Record<number, string> = {
+    0: 'disconnected',
+    1: 'connected', 
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  logger.debug('MongoDB connection check', { 
+    connectionState,
+    stateDescription: stateMapping[connectionState] || 'unknown'
+  });
   
   // For now, let's check if the connection is actually alive
   if (cached!.conn && mongoose.connection.readyState === 1) {
-    console.log('Using cached database connection');
+    logger.debug('Using cached database connection');
     return cached!.conn;
   }
 
   // Reset if connection is not alive
   if (mongoose.connection.readyState !== 1) {
-    console.log('Connection not alive, creating new connection...');
+    logger.info('Connection not alive, creating new connection', { connectionState });
     cached!.conn = null;
     cached!.promise = null;
   }
 
   if (!cached!.promise) {
-    console.log('Creating new database connection...');
+    
     const opts = {
       bufferCommands: false,
       serverSelectionTimeoutMS: 10000,
@@ -51,18 +65,30 @@ async function connectDB() {
     };
 
     cached!.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
-      console.log('Database connected successfully');
-      
-      // Add connection event listeners
-      mongoose.connection.on('error', (err) => {
-        console.error('MongoDB connection error:', err);
+      const duration = Date.now() - startTime;
+      logger.info('Database connected successfully', { 
+        duration,
+        host: mongoose.connection.host,
+        database: mongoose.connection.name,
+        readyState: mongoose.connection.readyState
       });
       
-      mongoose.connection.on('disconnected', () => {
-        console.log('MongoDB disconnected');
-        cached!.conn = null;
-        cached!.promise = null;
-      });
+      // Add connection event listeners (only once)
+      if (!mongoose.connection.listeners('error').length) {
+        mongoose.connection.on('error', (err) => {
+          logger.error('MongoDB connection error', err);
+        });
+        
+        mongoose.connection.on('disconnected', () => {
+          logger.warn('MongoDB disconnected');
+          cached!.conn = null;
+          cached!.promise = null;
+        });
+        
+        mongoose.connection.on('reconnected', () => {
+          logger.info('MongoDB reconnected');
+        });
+      }
       
       return mongoose;
     });
@@ -70,12 +96,15 @@ async function connectDB() {
 
   try {
     cached!.conn = await cached!.promise;
-  } catch (e) {
-    console.error('Database connection error:', e);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.error('Database connection failed', error as Error, { 
+      duration,
+      uri: MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')
+    });
     cached!.promise = null;
-    // Reset the cached connection so it can try again
     cached!.conn = null;
-    throw e;
+    throw error;
   }
 
   return cached!.conn;

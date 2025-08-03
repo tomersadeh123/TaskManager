@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import Task from '@/models/task';
+import Task from '@/models/Task';
 import { verifyToken } from '@/utils/jwt';
 import User from '@/models/User';
 
