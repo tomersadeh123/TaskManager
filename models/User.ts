@@ -11,7 +11,18 @@ const UserSchema = new mongoose.Schema({
   timezone: String,
   theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
   emailNotifications: { type: Boolean, default: true },
-  pushNotifications: { type: Boolean, default: true }
+  pushNotifications: { type: Boolean, default: true },
+  household: { type: mongoose.Schema.Types.ObjectId, ref: 'Household' },
+  role: {
+    type: String,
+    enum: ['admin', 'member'],
+    default: 'member'
+  },
+  preferences: {
+    choreReminders: { type: Boolean, default: true },
+    billReminders: { type: Boolean, default: true },
+    groceryNotifications: { type: Boolean, default: true }
+  }
 });
 
 // Hash password before saving
