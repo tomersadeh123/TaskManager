@@ -1,0 +1,111 @@
+server:
+  http_listen_port: 0
+  grpc_listen_port: 0
+        
+positions:
+  filename: /tmp/positions.yaml
+        
+client:
+  url: ${GRAFANA_LOKI_URL}
+        
+scrape_configs:
+# System logs
+- job_name: system
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: varlogs
+      __path__: /var/log/*.log
+
+# Next.js Application logs
+- job_name: nextjs-app
+  pipeline_stages:
+  # Parse JSON logs
+  - json:
+      expressions:
+        timestamp: timestamp
+        level: level
+        message: message
+        requestId: requestId
+        userId: userId
+        method: method
+        url: url
+        statusCode: statusCode
+        duration: duration
+        error_name: error.name
+        error_message: error.message
+  # Extract log level for filtering
+  - labels:
+      level:
+      requestId:
+      userId:
+      method:
+      statusCode:
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: nextjs-app
+      service: household-management
+      environment: development
+      __path__: /Users/tomersadehdev/Desktop/Tomer/nodeJsProject/logs/app.log
+
+# Error logs (separate stream for high visibility)
+- job_name: nextjs-errors
+  pipeline_stages:
+  - json:
+      expressions:
+        timestamp: timestamp
+        level: level
+        message: message
+        requestId: requestId
+        userId: userId
+        error_name: error.name
+        error_message: error.message
+        error_stack: error.stack
+  - labels:
+      level:
+      requestId:
+      userId:
+      error_name:
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: nextjs-errors
+      service: household-management
+      environment: development
+      log_type: error
+      __path__: /Users/tomersadehdev/Desktop/Tomer/nodeJsProject/logs/error.log
+
+# Access logs (HTTP requests/responses)
+- job_name: nextjs-access
+  pipeline_stages:
+  - json:
+      expressions:
+        timestamp: timestamp
+        level: level
+        message: message
+        requestId: requestId
+        userId: userId
+        method: method
+        url: url
+        statusCode: statusCode
+        duration: duration
+  - labels:
+      level:
+      requestId:
+      userId:
+      method:
+      url:
+      statusCode:
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: nextjs-access
+      service: household-management
+      environment: development
+      log_type: access
+      __path__: /Users/tomersadehdev/Desktop/Tomer/nodeJsProject/logs/access.log

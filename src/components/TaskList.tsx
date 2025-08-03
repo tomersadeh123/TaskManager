@@ -7,7 +7,7 @@ interface Task {
   _id: string;
   title: string;
   description: string;
-  status: string;
+  status: 'completed' | 'in-progress' | 'pending';
   user: string;
 }
 
@@ -19,7 +19,7 @@ interface TaskListProps {
 
 export default function TaskList({ tasks, onTaskUpdate, onTaskDelete }: TaskListProps) {
   const [editingTask, setEditingTask] = useState<string | null>(null);
-  const [editData, setEditData] = useState({ title: '', description: '', status: '' });
+  const [editData, setEditData] = useState<{ title: string; description: string; status: 'completed' | 'in-progress' | 'pending' }>({ title: '', description: '', status: 'pending' });
 
   const startEdit = (task: Task) => {
     setEditingTask(task._id);
@@ -39,7 +39,7 @@ export default function TaskList({ tasks, onTaskUpdate, onTaskDelete }: TaskList
 
   const cancelEdit = () => {
     setEditingTask(null);
-    setEditData({ title: '', description: '', status: '' });
+    setEditData({ title: '', description: '', status: 'pending' });
   };
 
   if (tasks.length === 0) {
@@ -110,7 +110,7 @@ export default function TaskList({ tasks, onTaskUpdate, onTaskDelete }: TaskList
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Status</label>
                 <select
                   value={editData.status}
-                  onChange={(e) => setEditData({...editData, status: e.target.value})}
+                  onChange={(e) => setEditData({...editData, status: e.target.value as 'completed' | 'in-progress' | 'pending'})}
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
                 >
                   <option value="pending">Pending</option>

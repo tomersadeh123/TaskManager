@@ -1,6 +1,66 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+
+// Types for dashboard data
+interface Task {
+  _id: string;
+  title: string;
+  description: string;
+  status: 'completed' | 'in-progress' | 'pending';
+  user: string;
+}
+
+interface Chore {
+  _id: string;
+  title: string;
+}
+
+interface Bill {
+  _id: string;
+  name: string;
+  amount: number;
+}
+
+interface OverviewData {
+  tasks: {
+    total: number;
+    completed: number;
+    pending: number;
+    inProgress: number;
+    completionRate: number;
+  };
+  chores: {
+    total: number;
+    overdue: number;
+    dueToday: number;
+    completedThisWeek: number;
+  };
+  bills: {
+    total: number;
+    unpaid: number;
+    overdue: number;
+    upcoming: number;
+    totalUnpaidAmount: number;
+  };
+  grocery: {
+    activeLists: number;
+    totalItems: number;
+    completedItems: number;
+    completionRate: number;
+  };
+  maintenance: {
+    total: number;
+    pending: number;
+    overdue: number;
+    completedThisMonth: number;
+  };
+  recentActivity: {
+    tasks: Task[];
+    chores: Chore[];
+    bills: Bill[];
+  };
+}
 import { useRouter } from 'next/navigation';
 import { 
   User, 
@@ -26,13 +86,6 @@ import ChoreList from '@/components/household/ChoreList';
 import BillForm from '@/components/household/BillForm';
 import BillList from '@/components/household/BillList';
 
-interface Task {
-  _id: string;
-  title: string;
-  description: string;
-  status: string;
-  user: string;
-}
 
 interface Chore {
   _id: string;
@@ -74,6 +127,7 @@ export default function Dashboard() {
   const [user, setUser] = useState<{ id: string; userName: string } | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [overview, setOverview] = useState<OverviewData | null>(null);
   const router = useRouter();
 
   const fetchTasks = useCallback(async () => {
@@ -99,14 +153,70 @@ export default function Dashboard() {
   }, [router]);
 
   const fetchChores = useCallback(async () => {
-    // Mock data for now - will be replaced with actual API call
-    setChores([]);
-  }, []);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/chores', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setChores(data.result || []);
+      } else if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        router.push('/login');
+      }
+    } catch (error) {
+      console.error('Error fetching chores:', error);
+    }
+  }, [router]);
 
   const fetchBills = useCallback(async () => {
-    // Mock data for now - will be replaced with actual API call
-    setBills([]);
-  }, []);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/bills', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setBills(data.result || []);
+      } else if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        router.push('/login');
+      }
+    } catch (error) {
+      console.error('Error fetching bills:', error);
+    }
+  }, [router]);
+
+  const fetchOverview = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/dashboard/overview', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setOverview(data.result);
+      } else if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        router.push('/login');
+      }
+    } catch (error) {
+      console.error('Error fetching overview:', error);
+    }
+  }, [router]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -121,10 +231,10 @@ export default function Dashboard() {
       setUser(JSON.parse(userData));
     }
 
-    Promise.all([fetchTasks(), fetchChores(), fetchBills()]).finally(() => {
+    Promise.all([fetchTasks(), fetchChores(), fetchBills(), fetchOverview()]).finally(() => {
       setLoading(false);
     });
-  }, [router, fetchTasks, fetchChores, fetchBills]);
+  }, [router, fetchTasks, fetchChores, fetchBills, fetchOverview]);
 
 
   const handleTaskCreate = async (taskData: { title: string; description: string; status: string }) => {
@@ -195,18 +305,69 @@ export default function Dashboard() {
     estimatedTime: number;
     priority: string;
   }) => {
-    // Mock implementation - will be replaced with actual API call
-    console.log('Creating chore:', choreData);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/chores', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(choreData)
+      });
+
+      if (response.ok) {
+        fetchChores(); // Refresh chores list
+      } else {
+        console.error('Failed to create chore');
+      }
+    } catch (error) {
+      console.error('Error creating chore:', error);
+    }
   };
 
   const handleChoreUpdate = async (choreId: string, updates: Partial<Chore>) => {
-    // Mock implementation - will be replaced with actual API call
-    console.log('Updating chore:', choreId, updates);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/chores/${choreId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates)
+      });
+
+      if (response.ok) {
+        fetchChores(); // Refresh chores list
+      } else {
+        console.error('Failed to update chore');
+      }
+    } catch (error) {
+      console.error('Error updating chore:', error);
+    }
   };
 
   const handleChoreDelete = async (choreId: string) => {
-    // Mock implementation - will be replaced with actual API call
-    console.log('Deleting chore:', choreId);
+    if (confirm('Are you sure you want to delete this chore?')) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/chores/${choreId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          fetchChores(); // Refresh chores list
+        } else {
+          console.error('Failed to delete chore');
+        }
+      } catch (error) {
+        console.error('Error deleting chore:', error);
+      }
+    }
   };
 
   const handleBillCreate = async (billData: {
@@ -220,18 +381,69 @@ export default function Dashboard() {
     notes: string;
     vendor: string;
   }) => {
-    // Mock implementation - will be replaced with actual API call
-    console.log('Creating bill:', billData);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/bills', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(billData)
+      });
+
+      if (response.ok) {
+        fetchBills(); // Refresh bills list
+      } else {
+        console.error('Failed to create bill');
+      }
+    } catch (error) {
+      console.error('Error creating bill:', error);
+    }
   };
 
   const handleBillUpdate = async (billId: string, updates: Partial<Bill>) => {
-    // Mock implementation - will be replaced with actual API call
-    console.log('Updating bill:', billId, updates);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/bills/${billId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates)
+      });
+
+      if (response.ok) {
+        fetchBills(); // Refresh bills list
+      } else {
+        console.error('Failed to update bill');
+      }
+    } catch (error) {
+      console.error('Error updating bill:', error);
+    }
   };
 
   const handleBillDelete = async (billId: string) => {
-    // Mock implementation - will be replaced with actual API call
-    console.log('Deleting bill:', billId);
+    if (confirm('Are you sure you want to delete this bill?')) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/bills/${billId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          fetchBills(); // Refresh bills list
+        } else {
+          console.error('Failed to delete bill');
+        }
+      } catch (error) {
+        console.error('Error deleting bill:', error);
+      }
+    }
   };
 
   const handleLogout = () => {
@@ -309,8 +521,13 @@ export default function Dashboard() {
                     <CheckCircle className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{tasks.length}</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      {overview?.tasks?.total || 0}
+                    </p>
                     <p className="text-slate-600 dark:text-slate-400 font-medium">Total Tasks</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-500">
+                      {overview?.tasks?.completionRate || 0}% complete
+                    </p>
                   </div>
                 </div>
               </div>
@@ -321,8 +538,13 @@ export default function Dashboard() {
                     <Users className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{chores.length}</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      {overview?.chores?.total || 0}
+                    </p>
                     <p className="text-slate-600 dark:text-slate-400 font-medium">Active Chores</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-500">
+                      {overview?.chores?.overdue || 0} overdue
+                    </p>
                   </div>
                 </div>
               </div>
@@ -333,8 +555,13 @@ export default function Dashboard() {
                     <DollarSign className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{bills.length}</p>
-                    <p className="text-slate-600 dark:text-slate-400 font-medium">Pending Bills</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      {overview?.bills?.unpaid || 0}
+                    </p>
+                    <p className="text-slate-600 dark:text-slate-400 font-medium">Unpaid Bills</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-500">
+                      ${(overview?.bills?.totalUnpaidAmount || 0).toFixed(2)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -345,17 +572,113 @@ export default function Dashboard() {
                     <Wrench className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">0</p>
-                    <p className="text-slate-600 dark:text-slate-400 font-medium">Maintenance</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      {overview?.maintenance?.pending || 0}
+                    </p>
+                    <p className="text-slate-600 dark:text-slate-400 font-medium">Pending Maintenance</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-500">
+                      {overview?.maintenance?.overdue || 0} overdue
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
             
-            <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">Recent Activity</h3>
-              <div className="text-slate-600 dark:text-slate-400 text-center py-8">
-                No recent activity to display
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">Today&apos;s Focus</h3>
+                <div className="space-y-4">
+                  {(overview?.chores?.dueToday || 0) > 0 && (
+                    <div className="flex items-center p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl">
+                      <Users className="w-5 h-5 text-amber-600 mr-3" />
+                      <div>
+                        <p className="font-medium text-slate-900 dark:text-slate-100">
+                          {overview?.chores.dueToday} chores due today
+                        </p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          Don&apos;t forget your household tasks!
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {(overview?.bills?.upcoming || 0) > 0 && (
+                    <div className="flex items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
+                      <DollarSign className="w-5 h-5 text-blue-600 mr-3" />
+                      <div>
+                        <p className="font-medium text-slate-900 dark:text-slate-100">
+                          {overview?.bills.upcoming} bills due this week
+                        </p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          Plan your payments ahead
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {(overview?.grocery?.activeLists || 0) > 0 && (
+                    <div className="flex items-center p-4 bg-green-50 dark:bg-green-900/20 rounded-2xl">
+                      <ShoppingCart className="w-5 h-5 text-green-600 mr-3" />
+                      <div>
+                        <p className="font-medium text-slate-900 dark:text-slate-100">
+                          {overview?.grocery.activeLists} active grocery lists
+                        </p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          {overview?.grocery.completionRate}% items completed
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {(!(overview?.chores?.dueToday || 0) && !(overview?.bills?.upcoming || 0) && !(overview?.grocery?.activeLists || 0)) && (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-gradient-to-r from-green-400 to-blue-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+                        <CheckCircle className="w-8 h-8 text-white" />
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-400">All caught up! 🎉</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">Recent Activity</h3>
+                <div className="space-y-4">
+                  {(overview?.recentActivity?.tasks?.length || 0) > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Tasks</h4>
+                      {overview?.recentActivity.tasks.slice(0, 3).map((task: Task) => (
+                        <div key={task._id} className="flex items-center py-2">
+                          <div className={`w-2 h-2 rounded-full mr-3 ${
+                            task.status === 'completed' ? 'bg-green-500' : 
+                            task.status === 'in-progress' ? 'bg-blue-500' : 'bg-slate-400'
+                          }`}></div>
+                          <span className="text-sm text-slate-600 dark:text-slate-400">{task.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {(overview?.recentActivity?.chores?.length || 0) > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Chores</h4>
+                      {overview?.recentActivity.chores.slice(0, 3).map((chore: Chore) => (
+                        <div key={chore._id} className="flex items-center py-2">
+                          <div className="w-2 h-2 rounded-full bg-green-500 mr-3"></div>
+                          <span className="text-sm text-slate-600 dark:text-slate-400">
+                            {chore.title} completed
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {(!(overview?.recentActivity?.tasks?.length || 0) && !(overview?.recentActivity?.chores?.length || 0)) && (
+                    <div className="text-center py-8 text-slate-600 dark:text-slate-400">
+                      No recent activity to display
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

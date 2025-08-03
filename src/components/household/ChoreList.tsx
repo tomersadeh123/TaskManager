@@ -68,12 +68,30 @@ export default function ChoreList({ chores, onChoreUpdate, onChoreDelete }: Chor
     });
   };
 
-  const markComplete = (choreId: string) => {
-    onChoreUpdate(choreId, { 
-      lastCompleted: new Date(),
-      // Calculate next due date based on frequency
-      nextDue: getNextDueDate(new Date())
-    });
+  const markComplete = async (choreId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/chores/${choreId}/complete`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        // Refresh the chores list by calling the parent update function
+        window.location.reload(); // Temporary solution - ideally pass a refresh function from parent
+      } else {
+        console.error('Failed to mark chore as complete');
+      }
+    } catch (error) {
+      console.error('Error marking chore as complete:', error);
+      // Fallback to the original method
+      onChoreUpdate(choreId, { 
+        lastCompleted: new Date(),
+        nextDue: getNextDueDate(new Date())
+      });
+    }
   };
 
   const getNextDueDate = (lastCompleted: Date) => {
