@@ -1,21 +1,49 @@
 @import "tailwindcss";
 
 :root {
+  /* Light theme variables */
   --background: #ffffff;
   --foreground: #171717;
+  --card-background: #ffffff;
+  --border: #e5e7eb;
+  --input: #ffffff;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --secondary: #f3f4f6;
+  --muted: #6b7280;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Dark theme variables */
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --card-background: #1e293b;
+  --border: #334155;
+  --input: #1e293b;
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --secondary: #334155;
+  --muted: #94a3b8;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
 }
 
+/* System theme detection */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not(.light):not(.dark) {
+    --background: #0f172a;
+    --foreground: #f1f5f9;
+    --card-background: #1e293b;
+    --border: #334155;
+    --input: #1e293b;
+    --primary: #3b82f6;
+    --primary-hover: #60a5fa;
+    --secondary: #334155;
+    --muted: #94a3b8;
   }
 }
 
@@ -23,4 +51,14 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+/* Theme-aware utility classes */
+.bg-background { background-color: var(--background); }
+.bg-card { background-color: var(--card-background); }
+.bg-secondary { background-color: var(--secondary); }
+.text-foreground { color: var(--foreground); }
+.text-muted { color: var(--muted); }
+.border-theme { border-color: var(--border); }
+.bg-input { background-color: var(--input); }

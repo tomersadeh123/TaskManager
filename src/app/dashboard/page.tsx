@@ -127,7 +127,9 @@ export default function Dashboard() {
     localStorage.removeItem('user');
     router.push('/login');
   };
-
+  const handleUserPage = () => {
+    router.push('/profile');
+  };
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -137,22 +139,30 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
+    <div className="min-h-screen bg-background">
+      <header className="bg-card shadow border-b border-theme">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Task Manager</h1>
+              <h1 className="text-3xl font-bold text-foreground">Task Manager</h1>
               {user && (
-                <p className="text-sm text-gray-600">Welcome back, {user.userName}!</p>
+                <p className="text-sm text-muted">Welcome back, {user.userName}!</p>
               )}
             </div>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-            >
-              Logout
-            </button>
+            <div className="flex space-x-3">
+              <button
+                onClick={handleUserPage}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Profile
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -162,7 +172,7 @@ export default function Dashboard() {
           <TaskForm onTaskCreate={handleTaskCreate} />
           
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Your Tasks ({tasks.length})</h2>
+            <h2 className="text-xl font-semibold text-foreground">Your Tasks ({tasks.length})</h2>
           </div>
 
           <TaskList 

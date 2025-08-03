@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import UserProfilePage from './UserProfile';
 
 interface Task {
   _id: string;
@@ -59,20 +60,20 @@ export default function TaskList({ tasks, onTaskUpdate, onTaskDelete }: TaskList
                 type="text"
                 value={editData.title}
                 onChange={(e) => setEditData({...editData, title: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-black"
                 placeholder="Task title"
               />
               <textarea
                 value={editData.description}
                 onChange={(e) => setEditData({...editData, description: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-black"
                 placeholder="Task description"
                 rows={3}
               />
               <select
                 value={editData.status}
                 onChange={(e) => setEditData({...editData, status: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-black"
               >
                 <option value="Pending">Pending</option>
                 <option value="In Progress">In Progress</option>
