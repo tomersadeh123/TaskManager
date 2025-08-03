@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { User, Mail, MapPin, Lock, ArrowLeft, Camera, Globe, Bell, Palette, FileText } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -78,17 +79,7 @@ export default function ProfilePage() {
     }
   };
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    
-    fetchUserProfile();
-  }, [router]); // fetchUserProfile is defined inside component so this is fine
-
-  const fetchUserProfile = async () => {
+  const fetchUserProfile = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/user/profile', {
@@ -126,7 +117,17 @@ export default function ProfilePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router, theme, setTheme]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    
+    fetchUserProfile();
+  }, [router, fetchUserProfile]);
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -296,7 +297,7 @@ export default function ProfilePage() {
               <div className="flex items-center space-x-4">
                 <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
                   {user?.avatar ? (
-                    <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+                    <Image src={user.avatar} alt="Profile" width={80} height={80} className="w-full h-full object-cover" />
                   ) : (
                     <User className="w-8 h-8 text-gray-400" />
                   )}
@@ -391,9 +392,11 @@ export default function ProfilePage() {
                 <div className="flex items-center space-x-4">
                   <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
                     {avatarPreview || user?.avatar ? (
-                      <img 
-                        src={avatarPreview || user?.avatar} 
+                      <Image 
+                        src={avatarPreview || user?.avatar || ''} 
                         alt="Profile preview" 
+                        width={80}
+                        height={80}
                         className="w-full h-full object-cover" 
                       />
                     ) : (

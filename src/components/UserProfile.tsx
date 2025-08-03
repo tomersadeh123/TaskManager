@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Camera, Edit3, Mail, Phone, MapPin, Calendar, Settings, Bell, Shield, LogOut } from 'lucide-react';
 
 interface UserProfile {
@@ -67,9 +68,11 @@ const UserProfilePage: React.FC = () => {
           <div className="relative px-6 pb-6">
             <div className="flex items-end -mt-16 mb-4">
               <div className="relative">
-                <img
+                <Image
                   src={user.avatar}
                   alt={user.name}
+                  width={128}
+                  height={128}
                   className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover"
                 />
                 <button className="absolute bottom-2 right-2 bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-full shadow-lg transition-colors">
