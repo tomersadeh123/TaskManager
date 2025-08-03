@@ -20,6 +20,7 @@ import mongoose from 'mongoose';
     paidDate: Date,
     reminderDays: { type: Number, default: 3 }, // days before due date
     notes: String,
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User',
   required: true },
     household: { type: mongoose.Schema.Types.ObjectId, ref: 'Household' },

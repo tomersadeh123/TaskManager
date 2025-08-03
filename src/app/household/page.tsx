@@ -18,7 +18,7 @@ interface Task {
   _id: string;
   title: string;
   description: string;
-  status: string;
+  status: 'completed' | 'in-progress' | 'pending';
   user: string;
 }
 

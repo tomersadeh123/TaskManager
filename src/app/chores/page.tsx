@@ -26,7 +26,6 @@ interface Chore {
 export default function ChoresPage() {
   const [chores, setChores] = useState<Chore[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<{ id: string; userName: string } | null>(null);
   const router = useRouter();
 
   const fetchChores = useCallback(async () => {
@@ -55,15 +54,10 @@ export default function ChoresPage() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
     
     if (!token) {
       router.push('/login');
       return;
-    }
-
-    if (userData) {
-      setUser(JSON.parse(userData));
     }
 
     fetchChores();

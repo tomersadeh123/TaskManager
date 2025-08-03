@@ -78,18 +78,64 @@ export default function BillList({ bills, onBillUpdate, onBillDelete }: BillList
     });
   };
 
-  const markPaid = (billId: string) => {
-    onBillUpdate(billId, { 
-      isPaid: true,
-      paidDate: new Date()
-    });
+  const markPaid = async (billId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/bills/${billId}/pay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ paidDate: new Date() })
+      });
+
+      if (response.ok) {
+        // Refresh by calling parent function
+        window.location.reload(); // Temporary solution
+      } else {
+        console.error('Failed to mark bill as paid');
+        // Fallback
+        onBillUpdate(billId, { 
+          isPaid: true,
+          paidDate: new Date()
+        });
+      }
+    } catch (error) {
+      console.error('Error marking bill as paid:', error);
+      onBillUpdate(billId, { 
+        isPaid: true,
+        paidDate: new Date()
+      });
+    }
   };
 
-  const markUnpaid = (billId: string) => {
-    onBillUpdate(billId, { 
-      isPaid: false,
-      paidDate: undefined
-    });
+  const markUnpaid = async (billId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/bills/${billId}/pay`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        window.location.reload(); // Temporary solution
+      } else {
+        console.error('Failed to mark bill as unpaid');
+        onBillUpdate(billId, { 
+          isPaid: false,
+          paidDate: undefined
+        });
+      }
+    } catch (error) {
+      console.error('Error marking bill as unpaid:', error);
+      onBillUpdate(billId, { 
+        isPaid: false,
+        paidDate: undefined
+      });
+    }
   };
 
   const getCategoryColor = (category: string) => {

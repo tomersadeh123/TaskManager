@@ -3,6 +3,7 @@ import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { verifyToken } from '@/utils/jwt';
 import { v2 as cloudinary } from 'cloudinary';
+import { logger } from '@/lib/logger';
 
 cloudinary.config({
   cloudinary_url: process.env.CLOUDINARY_URL,
@@ -11,34 +12,63 @@ cloudinary.config({
 
 // GET /api/user/profile - Get current user profile
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substr(2, 9);
+  
   try {
-    console.log('Request received: GET /api/user/profile');
+    logger.logRequest(request, requestId);
     await connectDB();
     
     // Get token from header
     const token = request.headers.get('authorization')?.split(' ')[1];
     if (!token) {
+      logger.logAuth('profile_access_failed', undefined, false, {
+        reason: 'no_token',
+        requestId
+      });
       return NextResponse.json({ message: 'No token provided' }, { status: 401 });
     }
 
     // Verify token
     const decoded = verifyToken(token);
+    const dbStart = Date.now();
     const user = await User.findById(decoded.id).select('-password');
+    const dbDuration = Date.now() - dbStart;
+    
     if (!user) {
+      logger.logAuth('profile_access_failed', decoded.id, false, {
+        reason: 'user_not_found',
+        requestId,
+        dbDuration
+      });
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }
 
+    logger.logDatabase('findById', 'users', dbDuration, undefined, { userId: user._id });
+    
+    const duration = Date.now() - startTime;
+    logger.logBusinessEvent('profile_viewed', user._id.toString(), 'user', user._id.toString(), {
+      userName: user.userName
+    });
+    
+    logger.logResponse(requestId, 200, duration, user._id.toString());
+
     return NextResponse.json(user);
   } catch (error) {
-    console.error('Error fetching profile:', error);
+    const duration = Date.now() - startTime;
+    logger.error('Error fetching profile', error as Error, { requestId, duration });
+    logger.logResponse(requestId, 401, duration);
     return NextResponse.json({ message: 'Invalid token' }, { status: 401 });
   }
 }
 
 // PUT /api/user/profile - Update user profile
 export async function PUT(request: NextRequest) {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substr(2, 9);
+  
   try {
-    console.log('Request received: PUT /api/user/profile');
+    logger.logRequest(request, requestId);
     await connectDB();
     
     // Get token from header
@@ -56,7 +86,8 @@ export async function PUT(request: NextRequest) {
 
     // Check if request contains FormData (file upload) or JSON
     const contentType = request.headers.get('content-type');
-    let body: {
+    
+    interface ProfileUpdateBody {
       userName?: string;
       email?: string;
       address?: string;
@@ -65,7 +96,9 @@ export async function PUT(request: NextRequest) {
       theme?: string;
       emailNotifications?: boolean;
       pushNotifications?: boolean;
-    };
+    }
+    
+    let body: ProfileUpdateBody;
     let avatarFile: File | null = null;
 
     if (contentType?.includes('multipart/form-data')) {
@@ -161,9 +194,19 @@ export async function PUT(request: NextRequest) {
       { new: true, select: '-password' }
     );
 
+    const duration = Date.now() - startTime;
+    logger.logBusinessEvent('profile_updated', user._id.toString(), 'user', user._id.toString(), {
+      updatedFields: Object.keys(body).filter(key => body[key as keyof ProfileUpdateBody] !== undefined),
+      hasAvatarUpload: !!(avatarFile && avatarFile.size > 0)
+    });
+    
+    logger.logResponse(requestId, 200, duration, user._id.toString());
+
     return NextResponse.json(updatedUser);
   } catch (error) {
-    console.error('Error updating profile:', error);
+    const duration = Date.now() - startTime;
+    logger.error('Error updating profile', error as Error, { requestId, duration });
+    logger.logResponse(requestId, 500, duration);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
