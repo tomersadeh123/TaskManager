@@ -56,7 +56,16 @@ export async function PUT(request: NextRequest) {
 
     // Check if request contains FormData (file upload) or JSON
     const contentType = request.headers.get('content-type');
-    let body: any;
+    let body: {
+      userName?: string;
+      email?: string;
+      address?: string;
+      bio?: string;
+      timezone?: string;
+      theme?: string;
+      emailNotifications?: boolean;
+      pushNotifications?: boolean;
+    };
     let avatarFile: File | null = null;
 
     if (contentType?.includes('multipart/form-data')) {

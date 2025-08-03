@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import UserProfilePage from './UserProfile';
 
 interface Task {
   _id: string;
