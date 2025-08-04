@@ -32,7 +32,6 @@ export class EmailService {
 
   private createEmailTemplate(
     messageContent: string,
-    trackingUrl: string,
     subjectPrefix: string
   ): EmailTemplate {
     const htmlTemplate = `
@@ -41,7 +40,6 @@ export class EmailService {
           <table>
             <tr>
               <td align="center" style="padding-top: 40px;">
-                <img src="https://storage.paragon.online/images/OnboardingTrackerLogo.png" width="400px" height="153px" alt="Paragon Logo"/>
               </td>
             </tr>
             <tr>
@@ -53,7 +51,7 @@ export class EmailService {
             </tr>
             <tr>
               <td align="center" style="padding-top: 40px;">
-                <a style="background-color: black; color: white; border-radius: 32px; padding: 12px 40px; font-family: Roboto,sans-serif; font-size: 22px; font-weight: 700; text-decoration: none;" href="${trackingUrl}">
+                <a style="background-color: black; color: white; border-radius: 32px; padding: 12px 40px; font-family: Roboto,sans-serif; font-size: 22px; font-weight: 700; text-decoration: none;">
                   OPEN
                 </a>
               </td>
@@ -68,7 +66,7 @@ export class EmailService {
     return {
       subject: `Onboarding Notification - ${subjectPrefix}`,
       html: htmlTemplate,
-      text: `${textContent}\n\nTrack your application: ${trackingUrl}`,
+      text: `${textContent}`,
     };
   }
 
@@ -86,7 +84,7 @@ export class EmailService {
 
   public async sendStatusUpdate(data: EmailNotificationData): Promise<boolean> {
     const { to, messageContent, trackingUrl, subjectPrefix } = data;
-    const template = this.createEmailTemplate(messageContent, trackingUrl, subjectPrefix);
+    const template = this.createEmailTemplate(messageContent, subjectPrefix);
     return this.sendEmail(to, template);
   }
 }

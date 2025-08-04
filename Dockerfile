@@ -52,8 +52,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --chown=nextjs:nodejs promtail/config.template.yaml ./promtail-config.yaml
 COPY --chown=nextjs:nodejs start-production.sh ./start.sh
 
-# Create logs directory
-RUN mkdir -p logs && chown nextjs:nodejs logs
+# Create logs directory and temp config directory with proper permissions
+RUN mkdir -p logs tmp && chown -R nextjs:nodejs logs tmp /app
 
 # Make startup script executable
 RUN chmod +x /app/start.sh

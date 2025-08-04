@@ -8,11 +8,11 @@ mkdir -p /app/logs
 
 # Replace environment variable in Promtail config
 echo "Configuring Promtail with environment variables..."
-envsubst < /app/promtail-config.yaml > /app/promtail-final.yaml
+envsubst < /app/promtail-config.yaml > /tmp/promtail-final.yaml
 
 # Start Promtail in background
 echo "Starting Promtail..."
-/usr/local/bin/promtail -config.file=/app/promtail-final.yaml &
+/usr/local/bin/promtail -config.file=/tmp/promtail-final.yaml &
 PROMTAIL_PID=$!
 
 # Start Next.js application
