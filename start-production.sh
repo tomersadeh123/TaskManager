@@ -12,7 +12,7 @@ envsubst < /app/promtail-config.yaml > /tmp/promtail-final.yaml
 
 # Start Promtail in background
 echo "Starting Promtail..."
-/app/promtail -config.file=/tmp/promtail-final.yaml &
+/usr/local/bin/promtail -config.file=/tmp/promtail-final.yaml &
 PROMTAIL_PID=$!
 
 # Start Next.js application
