@@ -30,8 +30,8 @@ WORKDIR /app
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
 
-# Install curl and gettext for downloading Promtail and envsubst
-RUN apk add --no-cache curl gettext
+# Install curl, gettext, and glibc compatibility for Promtail
+RUN apk add --no-cache curl gettext gcompat
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs

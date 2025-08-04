@@ -29,9 +29,27 @@ if [ -n "$PROMTAIL_PATH" ]; then
 
     # Start Promtail in background
     echo "Starting Promtail..."
-    $PROMTAIL_PATH -config.file=/tmp/promtail-final.yaml &
-    PROMTAIL_PID=$!
-    echo "✓ Promtail started with PID $PROMTAIL_PID"
+    echo "Checking Promtail permissions and dependencies..."
+    ls -la $PROMTAIL_PATH
+    
+    # Try to start Promtail with better error handling
+    if $PROMTAIL_PATH -version > /dev/null 2>&1; then
+        echo "✓ Promtail executable works"
+        $PROMTAIL_PATH -config.file=/tmp/promtail-final.yaml > /tmp/promtail.log 2>&1 &
+        PROMTAIL_PID=$!
+        echo "✓ Promtail started with PID $PROMTAIL_PID"
+        sleep 2
+        if kill -0 $PROMTAIL_PID 2>/dev/null; then
+            echo "✓ Promtail is running successfully"
+        else
+            echo "❌ Promtail failed to start, checking logs:"
+            cat /tmp/promtail.log || echo "No logs available"
+        fi
+    else
+        echo "❌ Promtail binary is not executable or has missing dependencies"
+        ldd $PROMTAIL_PATH || echo "ldd not available"
+        echo "⚠️  Continuing without Promtail logging..."
+    fi
 fi
 
 # Start Next.js application
