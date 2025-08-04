@@ -6,7 +6,7 @@ positions:
   filename: /tmp/positions.yaml
         
 client:
-  url: ${GRAFANA_LOKI_URL}
+  url: https://1294788:glc_eyJvIjoiMTQ5OTg1MSIsIm4iOiJzdGFjay0xMzM2OTk0LWludGVncmF0aW9uLW15bmV4dHBvcmplY3QiLCJrIjoiNVJSWjF0RTFOSEg5WjE1STIzejVKTU8wIiwibSI6eyJyIjoicHJvZC11cy13ZXN0LTAifX0=@logs-prod-021.grafana.net/api/prom/push
         
 scrape_configs:
 # System logs

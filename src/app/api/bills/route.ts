@@ -7,6 +7,10 @@ import { logger } from '@/lib/logger';
 
 // GET /api/bills - Get Bills
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substr(2, 9);
+  
+  logger.logRequest(request, requestId);
   try {
     // Parse token first
     const token = request.headers.get('authorization')?.split(' ')[1];
@@ -78,15 +82,28 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    const duration = Date.now() - startTime;
+    logger.logResponse(requestId, 200, duration, user._id.toString());
+    logger.logBusinessEvent('bills_retrieved', user._id.toString(), 'bill', undefined, {
+      billCount: billsWithStatus.length,
+      unpaidBills: billsWithStatus.filter(b => !b.isPaid).length
+    });
+    
     return NextResponse.json({ result: billsWithStatus });
   } catch (error) {
-    console.error('Error fetching bills:', error);
+    const duration = Date.now() - startTime;
+    logger.error('Error fetching bills', error as Error, { requestId, duration });
+    logger.logResponse(requestId, 500, duration);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
 
 // POST /api/bills - Create Bill
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substr(2, 9);
+  
+  logger.logRequest(request, requestId);
     try {
       // Parse token first
       const token = request.headers.get('authorization')?.split(' ')[1];
@@ -182,10 +199,20 @@ export async function POST(request: NextRequest) {
         await Bill.create(nextBillData);
       }
   
+      const duration = Date.now() - startTime;
+      logger.logResponse(requestId, 201, duration, user._id.toString());
+      logger.logBusinessEvent('bill_created', user._id.toString(), 'bill', bill._id.toString(), {
+        amount: bill.amount,
+        isRecurring: bill.isRecurring,
+        dueDate: bill.dueDate
+      });
+      
       return NextResponse.json({ message: 'Bill created successfully', result: bill }, { status: 201 });
   
     } catch (error) {
-      console.error('Error creating bill:', error);
+      const duration = Date.now() - startTime;
+      logger.error('Error creating bill', error as Error, { requestId, duration });
+      logger.logResponse(requestId, 500, duration);
       return NextResponse.json({ message: 'Server error' }, { status: 500 });
     }
   }

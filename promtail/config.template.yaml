@@ -48,8 +48,8 @@ scrape_configs:
     labels:
       job: nextjs-app
       service: household-management
-      environment: development
-      __path__: /Users/tomersadehdev/Desktop/Tomer/nodeJsProject/logs/app.log
+      environment: ${NODE_ENV:-production}
+      __path__: /app/logs/app.log
 
 # Error logs (separate stream for high visibility)
 - job_name: nextjs-errors
@@ -75,9 +75,9 @@ scrape_configs:
     labels:
       job: nextjs-errors
       service: household-management
-      environment: development
+      environment: ${NODE_ENV:-production}
       log_type: error
-      __path__: /Users/tomersadehdev/Desktop/Tomer/nodeJsProject/logs/error.log
+      __path__: /app/logs/error.log
 
 # Access logs (HTTP requests/responses)
 - job_name: nextjs-access
@@ -106,6 +106,6 @@ scrape_configs:
     labels:
       job: nextjs-access
       service: household-management
-      environment: development
+      environment: ${NODE_ENV:-production}
       log_type: access
-      __path__: /Users/tomersadehdev/Desktop/Tomer/nodeJsProject/logs/access.log
+      __path__: /app/logs/access.log

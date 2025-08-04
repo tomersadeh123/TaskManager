@@ -7,9 +7,14 @@ import GroceryList from '@/models/GroceryList';
 import MaintenanceItem from '@/models/MaintenanceItem';
 import { verifyToken } from '@/utils/jwt';
 import User from '@/models/User';
+import { logger } from '@/lib/logger';
 
 // GET /api/dashboard/overview - Get Dashboard Overview Stats
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substr(2, 9);
+  
+  logger.logRequest(request, requestId);
   try {
     // Parse token first
     const token = request.headers.get('authorization')?.split(' ')[1];
@@ -257,9 +262,19 @@ export async function GET(request: NextRequest) {
       }
     };
 
+    const duration = Date.now() - startTime;
+    logger.logResponse(requestId, 200, duration, user._id.toString());
+    logger.logBusinessEvent('dashboard_viewed', user._id.toString(), 'dashboard', undefined, {
+      totalTasks: overview.tasks.total,
+      totalBills: overview.bills.total,
+      totalChores: overview.chores.total
+    });
+    
     return NextResponse.json({ result: overview });
   } catch (error) {
-    console.error('Error fetching dashboard overview:', error);
+    const duration = Date.now() - startTime;
+    logger.error('Error fetching dashboard overview', error as Error, { requestId, duration });
+    logger.logResponse(requestId, 500, duration);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }

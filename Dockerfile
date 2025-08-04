@@ -30,13 +30,33 @@ WORKDIR /app
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
 
+# Install curl and gettext for downloading Promtail and envsubst
+RUN apk add --no-cache curl gettext
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+
+# Download and install Promtail
+RUN curl -O -L "https://github.com/grafana/loki/releases/latest/download/promtail-linux-amd64.zip" && \
+    unzip promtail-linux-amd64.zip && \
+    chmod +x promtail-linux-amd64 && \
+    mv promtail-linux-amd64 /usr/local/bin/promtail && \
+    rm promtail-linux-amd64.zip
 
 # Copy built application
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Copy Promtail configuration and startup script
+COPY --chown=nextjs:nodejs promtail/config.template.yaml ./promtail-config.yaml
+COPY --chown=nextjs:nodejs start-production.sh ./start.sh
+
+# Create logs directory
+RUN mkdir -p logs && chown nextjs:nodejs logs
+
+# Make startup script executable
+RUN chmod +x /app/start.sh
 
 USER nextjs
 
@@ -45,4 +65,4 @@ EXPOSE 3000
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["/app/start.sh"]

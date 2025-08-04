@@ -244,10 +244,10 @@ export async function logRequest(request: NextRequest, body?: Record<string, unk
 export function withLogging(
   handler: (
     request: NextRequest, 
-    context?: { params: Record<string, string> | Promise<Record<string, string>> }
+    context?: { params?: Record<string, string> | Promise<Record<string, string>> }
   ) => Promise<Response>
 ) {
-  return async (request: NextRequest, context?: { params: Record<string, string> | Promise<Record<string, string>> }) => {
+  return async (request: NextRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> }) => {
     const startTime = Date.now();
     const requestId = Math.random().toString(36).substr(2, 9);
     
