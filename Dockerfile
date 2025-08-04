@@ -40,7 +40,7 @@ RUN adduser --system --uid 1001 nextjs
 RUN curl -O -L "https://github.com/grafana/loki/releases/latest/download/promtail-linux-amd64.zip" && \
     unzip promtail-linux-amd64.zip && \
     chmod +x promtail-linux-amd64 && \
-    mv promtail-linux-amd64 /usr/local/bin/promtail && \
+    mv promtail-linux-amd64 /app/promtail && \
     rm promtail-linux-amd64.zip
 
 # Copy built application
