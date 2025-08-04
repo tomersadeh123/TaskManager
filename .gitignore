@@ -58,8 +58,9 @@ Thumbs.db
 logs
 *.log
 
-# Promtail config with secrets
+# Promtail config with secrets and binary
 promtail/config.yaml
+promtail/promtail
 
 # Runtime data
 pids
