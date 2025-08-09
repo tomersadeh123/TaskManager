@@ -24,25 +24,11 @@ export class LinkedInScraperService {
   ];
 
   private sessionCookies: Map<string, string> = new Map();
-  private lastRequestTime = 0;
 
   private getRandomUserAgent(): string {
     return this.userAgents[Math.floor(Math.random() * this.userAgents.length)];
   }
 
-  private async rateLimitDelay(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    const minDelay = 2000; // 2 seconds minimum for LinkedIn
-    
-    if (timeSinceLastRequest < minDelay) {
-      const delayTime = minDelay - timeSinceLastRequest;
-      logger.info(`⏰ LinkedIn rate limiting: waiting ${Math.round(delayTime)}ms`);
-      await new Promise(resolve => setTimeout(resolve, delayTime));
-    }
-    
-    this.lastRequestTime = Date.now();
-  }
 
   /**
    * Authenticate with LinkedIn using user credentials
@@ -108,7 +94,6 @@ export class LinkedInScraperService {
 
     for (const keyword of keywords.slice(0, 5)) { // Limit searches to avoid rate limiting
       try {
-        await this.rateLimitDelay();
         
         logger.info(`🔍 LinkedIn authenticated search: "${keyword}"`);
 
@@ -170,6 +155,13 @@ export class LinkedInScraperService {
           jobCards.slice(0, 15).each((i, element) => {
             try {
               const jobCard = $(element);
+
+              // Check if job should be skipped (already applied, viewed, etc.)
+              const jobStatus = this.checkLinkedInJobStatus(jobCard);
+              if (jobStatus.skip) {
+                logger.info(`⏭️ Skipping: ${jobStatus.reason}`);
+                return; // continue in cheerio each
+              }
 
               // Extract job data using enhanced selectors
               const jobData = this.parseLinkedInAuthenticatedJobData(jobCard, $, keyword);
@@ -383,6 +375,29 @@ export class LinkedInScraperService {
     if (hasaPremiumTerm) score += 10;
 
     return Math.min(100, Math.max(0, score));
+  }
+
+  /**
+   * Check LinkedIn job status to filter out already applied/viewed jobs
+   */
+  private checkLinkedInJobStatus(jobCard: unknown): { skip: boolean; reason: string } {
+    try {
+      // Look for footer indicators that show job status
+      const footerElement = (jobCard as { find: (selector: string) => { length: number; text: () => string } }).find('.job-card-container__footer-item.job-card-container__footer-job-state.t-bold');
+      
+      if (footerElement.length > 0) {
+        const footerText = footerElement.text().toLowerCase().trim();
+        
+        if (footerText.includes('applied') || footerText.includes('viewed') || footerText.includes('saved')) {
+          return { skip: true, reason: `Already ${footerText}` };
+        }
+      }
+      
+      return { skip: false, reason: 'New job' };
+      
+    } catch {
+      return { skip: false, reason: 'Status unknown' };
+    }
   }
 
   /**

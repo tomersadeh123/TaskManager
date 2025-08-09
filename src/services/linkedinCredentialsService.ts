@@ -5,11 +5,24 @@ import User from '@/models/User';
 const getEncryptionKey = () => {
   const key = process.env.LINKEDIN_ENCRYPTION_KEY;
   if (!key) {
+    console.error('❌ LINKEDIN_ENCRYPTION_KEY environment variable is required for LinkedIn credential encryption');
+    console.log('🔑 Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"');
+    console.log('📝 Add to your .env file: LINKEDIN_ENCRYPTION_KEY=<generated-key>');
     throw new Error('LINKEDIN_ENCRYPTION_KEY environment variable is required');
   }
-  // Ensure key is 32 bytes for AES-256
-  return Buffer.from(key, 'base64').length === 32 ? Buffer.from(key, 'base64') : 
-         crypto.scryptSync(key, 'salt', 32);
+  
+  try {
+    // Try to parse as base64 first
+    const buffer = Buffer.from(key, 'base64');
+    if (buffer.length === 32) {
+      return buffer;
+    }
+  } catch {
+    // Fall back to using the key directly with scrypt
+  }
+  
+  // Use scrypt to derive a 32-byte key from the provided string
+  return crypto.scryptSync(key, 'linkedin-salt', 32);
 };
 const IV_LENGTH = 12; // GCM uses 12-byte IV
 // const TAG_LENGTH = 16; // GCM authentication tag length - for future use
@@ -39,31 +52,52 @@ export class LinkedInCredentialsService {
   }
 
   /**
-   * Decrypt LinkedIn credentials using AES-256-GCM
+   * Decrypt LinkedIn credentials using AES-256-GCM with backward compatibility
    */
   private static decrypt(text: string): string {
     try {
       const encryptionKey = getEncryptionKey();
       const parts = text.split(':');
-      if (parts.length !== 3) {
-        throw new Error('Invalid encrypted data format');
+      
+      // New format: iv:authTag:encryptedData (3 parts)
+      if (parts.length === 3) {
+        const iv = Buffer.from(parts[0], 'hex');
+        const authTag = Buffer.from(parts[1], 'hex');
+        const encryptedData = parts[2];
+        
+        const decipher = crypto.createDecipher('aes-256-gcm', encryptionKey);
+        decipher.setAAD(iv);
+        decipher.setAuthTag(authTag);
+        
+        let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        
+        return decrypted;
       }
       
-      const iv = Buffer.from(parts[0], 'hex');
-      const authTag = Buffer.from(parts[1], 'hex');
-      const encryptedData = parts[2];
+      // Legacy format: try old encryption method as fallback
+      if (parts.length === 2) {
+        console.warn('⚠️ Using legacy credential decryption - user should re-enter credentials');
+        
+        try {
+          const decipher = crypto.createDecipher('aes-256-cbc', encryptionKey);
+          let decrypted = decipher.update(parts[1], 'hex', 'utf8');
+          decrypted += decipher.final('utf8');
+          return decrypted;
+        } catch (legacyError) {
+          console.error('Legacy decryption also failed:', legacyError);
+          throw new Error('Credentials format incompatible - please re-enter LinkedIn credentials');
+        }
+      }
       
-      const decipher = crypto.createDecipher('aes-256-gcm', encryptionKey);
-      decipher.setAAD(iv);
-      decipher.setAuthTag(authTag);
+      throw new Error('Invalid encrypted data format - please re-enter LinkedIn credentials');
       
-      let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
-      
-      return decrypted;
     } catch (error) {
       console.error('Decryption failed:', error);
-      throw new Error('Failed to decrypt credentials');
+      if (error instanceof Error && error.message.includes('please re-enter')) {
+        throw error;
+      }
+      throw new Error('Failed to decrypt credentials - please re-enter LinkedIn credentials');
     }
   }
 
@@ -103,11 +137,19 @@ export class LinkedInCredentialsService {
     try {
       const user = await User.findById(userId);
       if (!user?.linkedinAuth?.isConnected || !user.linkedinAuth.email || !user.linkedinAuth.password) {
+        console.log(`🔍 No LinkedIn credentials found for user ${userId}`);
         return null;
       }
 
       // Check if credentials are still valid
       if (user.linkedinAuth.loginStatus === 'invalid' || user.linkedinAuth.loginStatus === 'locked') {
+        console.log(`⚠️ LinkedIn credentials for user ${userId} are marked as ${user.linkedinAuth.loginStatus}`);
+        return null;
+      }
+
+      // Check if encryption key is available
+      if (!process.env.LINKEDIN_ENCRYPTION_KEY) {
+        console.error('❌ Cannot decrypt LinkedIn credentials: LINKEDIN_ENCRYPTION_KEY not set');
         return null;
       }
 
@@ -117,6 +159,22 @@ export class LinkedInCredentialsService {
       };
     } catch (error) {
       console.error('Error getting LinkedIn credentials:', error);
+      
+      // If decryption fails, it might be due to missing env var or format change
+      if (error instanceof Error) {
+        if (error.message.includes('LINKEDIN_ENCRYPTION_KEY')) {
+          console.error('💡 Solution: Set LINKEDIN_ENCRYPTION_KEY environment variable');
+        } else if (error.message.includes('please re-enter')) {
+          console.warn('🔄 LinkedIn credentials need to be re-entered due to encryption format update');
+          // Mark credentials as invalid so user knows to re-enter them
+          try {
+            await this.updateLoginStatus(userId, 'invalid');
+          } catch (updateError) {
+            console.error('Failed to update credential status:', updateError);
+          }
+        }
+      }
+      
       return null;
     }
   }
@@ -229,6 +287,54 @@ export class LinkedInCredentialsService {
     } catch (error) {
       console.error('Error getting LinkedIn profile:', error);
       return null;
+    }
+  }
+
+  /**
+   * Check if user needs to re-enter LinkedIn credentials
+   */
+  static async needsCredentialUpdate(userId: string): Promise<{ 
+    needsUpdate: boolean; 
+    reason?: string; 
+  }> {
+    try {
+      const user = await User.findById(userId);
+      
+      if (!user?.linkedinAuth?.isConnected) {
+        return { needsUpdate: true, reason: 'No LinkedIn credentials found' };
+      }
+      
+      if (user.linkedinAuth.loginStatus === 'invalid') {
+        return { needsUpdate: true, reason: 'Credentials marked as invalid - please re-enter' };
+      }
+      
+      if (user.linkedinAuth.loginStatus === 'locked') {
+        return { needsUpdate: true, reason: 'Account locked - please re-enter credentials' };
+      }
+      
+      // Try to decrypt to check if format is compatible
+      if (!process.env.LINKEDIN_ENCRYPTION_KEY) {
+        return { needsUpdate: true, reason: 'Encryption key not available' };
+      }
+      
+      if (user.linkedinAuth.email && user.linkedinAuth.password) {
+        try {
+          this.decrypt(user.linkedinAuth.email);
+          this.decrypt(user.linkedinAuth.password);
+          return { needsUpdate: false };
+        } catch (error) {
+          return { 
+            needsUpdate: true, 
+            reason: 'Credentials format incompatible - please re-enter to use new encryption' 
+          };
+        }
+      }
+      
+      return { needsUpdate: true, reason: 'Incomplete credential data' };
+      
+    } catch (error) {
+      console.error('Error checking credential status:', error);
+      return { needsUpdate: true, reason: 'Error checking credentials' };
     }
   }
 

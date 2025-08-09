@@ -29,6 +29,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if credentials need updating (due to encryption format change)
+    const credentialStatus = await LinkedInCredentialsService.needsCredentialUpdate(decoded.userId);
+    
+    if (credentialStatus.needsUpdate) {
+      return NextResponse.json({
+        success: true,
+        result: {
+          isConnected: false,
+          needsUpdate: true,
+          updateReason: credentialStatus.reason,
+          profile: null
+        }
+      });
+    }
+
     // Check LinkedIn connection status
     const isConnected = await LinkedInCredentialsService.hasLinkedInCredentials(decoded.userId);
     

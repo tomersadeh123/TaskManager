@@ -35,8 +35,6 @@ export class JobScraperService {
     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   ];
   
-  private requestCount = 0;
-  private lastRequestTime = 0;
 
   /**
    * Get a random user agent to avoid detection
@@ -45,28 +43,6 @@ export class JobScraperService {
     return this.userAgents[Math.floor(Math.random() * this.userAgents.length)];
   }
 
-  /**
-   * Smart rate limiting to avoid being blocked
-   */
-  private async rateLimitDelay(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    const minDelay = 1000; // 1 second minimum
-    const maxDelay = 3000; // 3 seconds maximum
-    
-    // Increase delay based on request count
-    const baseDelay = Math.min(maxDelay, minDelay + (this.requestCount * 100));
-    const randomDelay = baseDelay + Math.random() * 1000;
-    
-    if (timeSinceLastRequest < randomDelay) {
-      const delayTime = randomDelay - timeSinceLastRequest;
-      logger.info(`⏰ Rate limiting: waiting ${Math.round(delayTime)}ms`);
-      await new Promise(resolve => setTimeout(resolve, delayTime));
-    }
-    
-    this.lastRequestTime = Date.now();
-    this.requestCount++;
-  }
 
   /**
    * Enhanced HTTP request with retry logic and error handling
@@ -80,7 +56,6 @@ export class JobScraperService {
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        await this.rateLimitDelay();
         
         const headers = {
           'User-Agent': this.getRandomUserAgent(),
@@ -399,7 +374,18 @@ export class JobScraperService {
       // Extract job data from Drushim's __NUXT__ object or window data
       const nuxtMatch = html.match(/<script[^>]*>window\.__NUXT__\s*=\s*([\s\S]+?)<\/script>/);
       if (nuxtMatch) {
-        const jsonStr = nuxtMatch[1];
+        let jsonStr = nuxtMatch[1];
+        
+        // Clean up the JSON string - remove trailing semicolons and JavaScript code
+        jsonStr = jsonStr.replace(/;[\s\S]*$/, '');
+        jsonStr = jsonStr.trim();
+        
+        // Handle case where it's wrapped in a function call like "(function(){...})"
+        if (jsonStr.startsWith('(function') || jsonStr.startsWith('function')) {
+          logger.warn('⚠️ Drushim returned JavaScript code instead of JSON, falling back to HTML parsing');
+          return [];
+        }
+        
         const nuxtData = JSON.parse(jsonStr);
         
         if (nuxtData && nuxtData.data && nuxtData.data[0]) {
@@ -444,7 +430,11 @@ export class JobScraperService {
       }
       
     } catch (error) {
-      console.log('Error extracting Drushim JSON data:', error);
+      if (error instanceof SyntaxError) {
+        logger.warn('⚠️ Drushim JSON parsing failed - website may have changed structure or returned JavaScript');
+      } else {
+        logger.error('❌ Error extracting Drushim JSON data:', error as Error);
+      }
     }
     
     return [];
@@ -1054,9 +1044,6 @@ export class JobScraperService {
    */
   async scrapeWithFallback(userId: string, searchConfig: SearchConfig): Promise<{ success: boolean; jobCount: number; error?: string; usedFallback?: boolean }> {
     try {
-      // Reset request counters for new session
-      this.requestCount = 0;
-      this.lastRequestTime = 0;
 
       // Try primary scraping method first
       const primaryResult = await this.scrapeJobsForUser(userId, searchConfig);
