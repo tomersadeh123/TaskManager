@@ -3,6 +3,7 @@ import connectDB from '@/lib/db';
 import User from '@/models/User';
 import jwt from 'jsonwebtoken';
 import { JobScraperService, defaultSearchConfig } from '@/services/jobScraperService';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -50,7 +51,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🚀 Starting job scraping for user: ${user.userName}`);
+    logger.info('Job scraping API request initiated', { 
+      userId: user._id, 
+      userName: user.userName, 
+      configType: searchConfig ? 'custom' : 'default',
+      linkedinKeywords: config.linkedin.length,
+      drushimSearches: config.drushim.length
+    });
 
     // Initialize job scraper
     const scraper = new JobScraperService();
@@ -59,7 +66,12 @@ export async function POST(request: NextRequest) {
     const result = await scraper.scrapeJobsForUser(user._id.toString(), config);
 
     if (result.success) {
-      console.log(`✅ Job scraping completed: ${result.jobCount} new jobs found`);
+      logger.info('Job scraping API completed successfully', {
+        userId: user._id,
+        userName: user.userName,
+        newJobCount: result.jobCount,
+        configUsed: config
+      });
       
       return NextResponse.json({
         success: true,
@@ -70,7 +82,11 @@ export async function POST(request: NextRequest) {
         }
       });
     } else {
-      console.error(`❌ Job scraping failed: ${result.error}`);
+      logger.error('Job scraping API failed', new Error(result.error || 'Unknown scraping error'), {
+        userId: user._id,
+        userName: user.userName,
+        configUsed: config
+      });
       
       return NextResponse.json(
         { 
@@ -82,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Job scraping API error:', error);
+    logger.error('Job scraping API error', error as Error);
     return NextResponse.json(
       { success: false, message: 'Failed to start job scraping' },
       { status: 500 }
@@ -111,7 +127,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error fetching scrape config:', error);
+    logger.error('Scrape config fetch failed', error as Error);
     return NextResponse.json(
       { success: false, message: 'Failed to fetch configuration' },
       { status: 500 }

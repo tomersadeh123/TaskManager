@@ -28,27 +28,25 @@ async function connectDB() {
   }
 
   const connectionState = mongoose.connection.readyState;
-  const stateMapping: Record<number, string> = {
-    0: 'disconnected',
-    1: 'connected', 
-    2: 'connecting',
-    3: 'disconnecting'
-  };
-  
-  logger.debug('MongoDB connection check', { 
-    connectionState,
-    stateDescription: stateMapping[connectionState] || 'unknown'
-  });
   
   // For now, let's check if the connection is actually alive
   if (cached!.conn && mongoose.connection.readyState === 1) {
-    logger.debug('Using cached database connection');
+    // Only log meaningful cached connection usage (when connection was previously lost)
     return cached!.conn;
   }
 
   // Reset if connection is not alive
   if (mongoose.connection.readyState !== 1) {
-    logger.info('Connection not alive, creating new connection', { connectionState });
+    const stateMapping: Record<number, string> = {
+      0: 'disconnected',
+      1: 'connected', 
+      2: 'connecting',
+      3: 'disconnecting'
+    };
+    logger.info('MongoDB connection lost - creating new connection', { 
+      connectionState,
+      stateDescription: stateMapping[connectionState] || 'unknown'
+    });
     cached!.conn = null;
     cached!.promise = null;
   }
@@ -66,11 +64,11 @@ async function connectDB() {
 
     cached!.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
       const duration = Date.now() - startTime;
-      logger.info('Database connected successfully', { 
-        duration,
+      logger.info('MongoDB connection established', { 
+        duration: `${duration}ms`,
         host: mongoose.connection.host,
         database: mongoose.connection.name,
-        readyState: mongoose.connection.readyState
+        poolSize: opts.maxPoolSize
       });
       
       // Add connection event listeners (only once)
@@ -80,13 +78,19 @@ async function connectDB() {
         });
         
         mongoose.connection.on('disconnected', () => {
-          logger.warn('MongoDB disconnected');
+          logger.warn('MongoDB connection lost - clearing cache', { 
+            host: mongoose.connection.host,
+            database: mongoose.connection.name
+          });
           cached!.conn = null;
           cached!.promise = null;
         });
         
         mongoose.connection.on('reconnected', () => {
-          logger.info('MongoDB reconnected');
+          logger.info('MongoDB reconnected successfully', {
+            host: mongoose.connection.host,
+            database: mongoose.connection.name
+          });
         });
       }
       
