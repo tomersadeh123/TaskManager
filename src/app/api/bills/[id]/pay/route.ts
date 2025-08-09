@@ -3,6 +3,8 @@ import connectDB from '@/lib/db';
 import Bill from '@/models/Bill';
 import { verifyToken } from '@/utils/jwt';
 import User from '@/models/User';
+import NotificationService from '@/services/notificationService';
+import { logger } from '@/lib/logger';
 
 // POST /api/bills/[id]/pay - Mark Bill as Paid
 export async function POST(
@@ -19,7 +21,7 @@ export async function POST(
     }
 
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }
@@ -56,6 +58,26 @@ export async function POST(
       { new: true }
     );
 
+    // Send notification for bill payment
+    try {
+      await NotificationService.create({
+        userId: user._id.toString(),
+        title: 'Bill Paid Successfully',
+        message: `Bill "${bill.name}" has been marked as paid. Amount: $${updateData.paidAmount || bill.amount}`,
+        type: 'bill',
+        data: {
+          billId: bill._id.toString(),
+          amount: updateData.paidAmount || bill.amount,
+          paidDate: updateData.paidDate
+        }
+      });
+    } catch (notificationError) {
+      logger.error('Failed to send bill payment notification', notificationError as Error, {
+        billId: bill._id.toString(),
+        userId: user._id.toString()
+      });
+    }
+
     return NextResponse.json({ 
       message: 'Bill marked as paid successfully',
       result: updatedBill 
@@ -81,7 +103,7 @@ export async function DELETE(
     }
 
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }

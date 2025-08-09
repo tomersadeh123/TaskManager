@@ -37,9 +37,9 @@ export async function POST(
     // Connect to database AFTER token validation
     await connectDB();
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
-      logger.logAuth('chore_completion_failed', decoded.id, false, {
+      logger.logAuth('chore_completion_failed', decoded.userId, false, {
         reason: 'user_not_found',
         requestId
       });

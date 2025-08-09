@@ -13,6 +13,7 @@ import ChoreList from '@/components/household/ChoreList';
 import ChoreForm from '@/components/household/ChoreForm';
 import BillList from '@/components/household/BillList';
 import BillForm from '@/components/household/BillForm';
+import NotificationBell from '@/components/NotificationBell';
 
 interface Task {
   _id: string;
@@ -838,6 +839,7 @@ export default function HouseholdDashboard() {
             </nav>
 
             <div className="flex items-center space-x-3">
+              <NotificationBell />
               <button
                 onClick={() => router.push('/profile')}
                 className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"

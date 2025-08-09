@@ -4,6 +4,7 @@ import Bill from '@/models/Bill';
 import { verifyToken } from '@/utils/jwt';
 import User from '@/models/User';
 import { logger } from '@/lib/logger';
+import NotificationService from '@/services/notificationService';
 
 // GET /api/bills - Get Bills
 export async function GET(request: NextRequest) {
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     // Connect to database AFTER token validation
     await connectDB();
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
       // Connect to database AFTER token validation
       await connectDB();
 
-      const user = await User.findById(decoded.id);
+      const user = await User.findById(decoded.userId);
       if (!user) {
         return NextResponse.json({ message: 'User not found' }, { status: 401 });
       }
@@ -163,6 +164,26 @@ export async function POST(request: NextRequest) {
         category: bill.category,
         isRecurring: bill.isRecurring
       });
+
+      // Send notification for new bill
+      try {
+        await NotificationService.create({
+          userId: user._id.toString(),
+          title: 'New Bill Added',
+          message: `Bill "${bill.name}" for $${bill.amount} has been created. Due on ${new Date(bill.dueDate).toLocaleDateString()}`,
+          type: 'bill',
+          data: {
+            billId: bill._id.toString(),
+            amount: bill.amount,
+            dueDate: bill.dueDate
+          }
+        });
+      } catch (notificationError) {
+        logger.error('Failed to send bill creation notification', notificationError as Error, {
+          billId: bill._id.toString(),
+          userId: user._id.toString()
+        });
+      }
 
       // If recurring, schedule next bill
       if (isRecurring) {

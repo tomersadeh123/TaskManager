@@ -23,7 +23,7 @@ export async function GET(
     // Connect to database AFTER token validation
     await connectDB();
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }

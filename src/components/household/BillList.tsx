@@ -324,7 +324,7 @@ export default function BillList({ bills, onBillUpdate, onBillDelete }: BillList
                         <span>Vendor: {bill.vendor}</span>
                       )}
                       {bill.isRecurring && (
-                        <span>Every {bill.frequency}</span>
+                        <span>{bill.frequency}</span>
                       )}
                     </div>
                     

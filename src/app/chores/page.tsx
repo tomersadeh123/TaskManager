@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Users, Calendar, Clock } from 'lucide-react';
 import ChoreList from '@/components/household/ChoreList';
 import ChoreForm from '@/components/household/ChoreForm';
+import QuickNavigation from '@/components/QuickNavigation';
+import NotificationBell from '@/components/NotificationBell';
 
 interface Chore {
   _id: string;
@@ -170,15 +172,19 @@ export default function ChoresPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={handleGoBack}
-            className="group inline-flex items-center text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 mb-6 transition-all duration-200"
-          >
-            <div className="p-2 rounded-xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors mr-3">
-              <ArrowLeft className="w-4 h-4" />
-            </div>
-            <span className="font-medium">Back to Dashboard</span>
-          </button>
+          <div className="flex items-center justify-between mb-6">
+            <button
+              onClick={handleGoBack}
+              className="group inline-flex items-center text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition-all duration-200"
+            >
+              <div className="p-2 rounded-xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors mr-3">
+                <ArrowLeft className="w-4 h-4" />
+              </div>
+              <span className="font-medium">Back to Dashboard</span>
+            </button>
+            
+            <NotificationBell />
+          </div>
           <div className="text-left">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent mb-2">Household Chores</h1>
             <p className="text-slate-600 dark:text-slate-400 text-lg">Manage and track household tasks</p>
@@ -235,6 +241,9 @@ export default function ChoresPage() {
             </div>
           </div>
         </div>
+
+        {/* Quick Navigation */}
+        <QuickNavigation currentPage="chores" compact />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Chore Form */}
