@@ -3,12 +3,14 @@ import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { signToken } from '@/utils/jwt';
 import { logger } from '@/lib/logger';
+import { withRateLimit, authRateLimit } from '@/middleware/rateLimiter';
 
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
-  const requestId = Math.random().toString(36).substr(2, 9);
-  
-  try {
+  return withRateLimit(request, authRateLimit, async () => {
+    const startTime = Date.now();
+    const requestId = Math.random().toString(36).substr(2, 9);
+    
+    try {
     // Log the request
     logger.logRequest(request, requestId);
     
@@ -43,7 +45,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = signToken(user._id);
+    const token = signToken(user._id.toString(), user.userName, '24h'); // Longer session for better UX
+    const refreshToken = signToken(user._id.toString(), user.userName, '7d');
     const duration = Date.now() - startTime;
     
     logger.logAuth('login_success', user._id.toString(), true, { 
@@ -56,7 +59,9 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({
       token,
-      user: { id: user._id, userName: user.userName }
+      refreshToken,
+      user: { id: user._id, userName: user.userName },
+      expiresIn: 24 * 60 * 60 * 1000 // 24 hours in milliseconds
     });
   } catch (error) {
     const duration = Date.now() - startTime;
@@ -67,5 +72,6 @@ export async function POST(request: NextRequest) {
       { message: 'Server error' },
       { status: 500 }
     );
-  }
+    }
+  });
 }

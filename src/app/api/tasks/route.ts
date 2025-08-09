@@ -3,7 +3,7 @@ import connectDB from '@/lib/db';
 import Task from '@/models/Task';
 import { verifyToken } from '@/utils/jwt';
 import User from '@/models/User';
-import validation from '@/lib/RequestValidations';
+import { RequestValidator, commonSchemas } from '@/lib/RequestValidations';
 import { logger } from '@/lib/logger';
 
 // GET /api/tasks - Get all tasks for authenticated user
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validationRes = validation({ body });
+    const validationRes = RequestValidator.validateData(commonSchemas.task, body);
 
     if (validationRes.isValid) {
       const taskData = {

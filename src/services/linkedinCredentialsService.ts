@@ -1,32 +1,70 @@
 import crypto from 'crypto';
 import User from '@/models/User';
 
-// Encryption utilities for LinkedIn credentials
-const ENCRYPTION_KEY = process.env.LINKEDIN_ENCRYPTION_KEY || crypto.randomBytes(32);
-const IV_LENGTH = 16;
+// Encryption utilities for LinkedIn credentials - using AES-256-GCM for security
+const getEncryptionKey = () => {
+  const key = process.env.LINKEDIN_ENCRYPTION_KEY;
+  if (!key) {
+    throw new Error('LINKEDIN_ENCRYPTION_KEY environment variable is required');
+  }
+  // Ensure key is 32 bytes for AES-256
+  return Buffer.from(key, 'base64').length === 32 ? Buffer.from(key, 'base64') : 
+         crypto.scryptSync(key, 'salt', 32);
+};
+const IV_LENGTH = 12; // GCM uses 12-byte IV
+// const TAG_LENGTH = 16; // GCM authentication tag length - for future use
 
 export class LinkedInCredentialsService {
   /**
-   * Encrypt sensitive LinkedIn credentials before storing in database
+   * Encrypt sensitive LinkedIn credentials using AES-256-GCM
    */
   private static encrypt(text: string): string {
-    const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipher('aes-256-cbc', ENCRYPTION_KEY);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return iv.toString('hex') + ':' + encrypted;
+    try {
+      const encryptionKey = getEncryptionKey();
+      const iv = crypto.randomBytes(IV_LENGTH);
+      const cipher = crypto.createCipher('aes-256-gcm', encryptionKey);
+      cipher.setAAD(iv); // Use IV as additional authenticated data
+      
+      let encrypted = cipher.update(text, 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      
+      const authTag = cipher.getAuthTag();
+      
+      // Format: iv:authTag:encryptedData
+      return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+    } catch (error) {
+      console.error('Encryption failed:', error);
+      throw new Error('Failed to encrypt credentials');
+    }
   }
 
   /**
-   * Decrypt LinkedIn credentials when retrieving from database
+   * Decrypt LinkedIn credentials using AES-256-GCM
    */
   private static decrypt(text: string): string {
-    const parts = text.split(':');
-    const encryptedText = parts.join(':');
-    const decipher = crypto.createDecipher('aes-256-cbc', ENCRYPTION_KEY);
-    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
+    try {
+      const encryptionKey = getEncryptionKey();
+      const parts = text.split(':');
+      if (parts.length !== 3) {
+        throw new Error('Invalid encrypted data format');
+      }
+      
+      const iv = Buffer.from(parts[0], 'hex');
+      const authTag = Buffer.from(parts[1], 'hex');
+      const encryptedData = parts[2];
+      
+      const decipher = crypto.createDecipher('aes-256-gcm', encryptionKey);
+      decipher.setAAD(iv);
+      decipher.setAuthTag(authTag);
+      
+      let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      
+      return decrypted;
+    } catch (error) {
+      console.error('Decryption failed:', error);
+      throw new Error('Failed to decrypt credentials');
+    }
   }
 
   /**

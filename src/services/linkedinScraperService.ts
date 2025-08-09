@@ -183,7 +183,7 @@ export class LinkedInScraperService {
                   postingDays: jobData.postingDays || 999,
                   url: jobData.url || '',
                   description: jobData.description || '',
-                  searchKeyword: jobData.searchKeyword || '',
+                  searchKeyword: jobData.searchKeyword || keyword,
                   matchScore: jobData.matchScore,
                   source: 'LinkedIn' as const,
                   linkedInEnhanced: true,
