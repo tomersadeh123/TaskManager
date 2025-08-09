@@ -35,16 +35,13 @@ export class LinkedInCredentialsService {
     try {
       const encryptionKey = getEncryptionKey();
       const iv = crypto.randomBytes(IV_LENGTH);
-      const cipher = crypto.createCipher('aes-256-gcm', encryptionKey);
-      cipher.setAAD(iv); // Use IV as additional authenticated data
+      const cipher = crypto.createCipher('aes-256-cbc', encryptionKey);
       
       let encrypted = cipher.update(text, 'utf8', 'hex');
       encrypted += cipher.final('hex');
       
-      const authTag = cipher.getAuthTag();
-      
-      // Format: iv:authTag:encryptedData
-      return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+      // Format: iv:encryptedData (simplified for compatibility)
+      return iv.toString('hex') + ':' + encrypted;
     } catch (error) {
       console.error('Encryption failed:', error);
       throw new Error('Failed to encrypt credentials');
@@ -59,35 +56,17 @@ export class LinkedInCredentialsService {
       const encryptionKey = getEncryptionKey();
       const parts = text.split(':');
       
-      // New format: iv:authTag:encryptedData (3 parts)
-      if (parts.length === 3) {
+      // Current format: iv:encryptedData (2 parts)
+      if (parts.length === 2) {
         const iv = Buffer.from(parts[0], 'hex');
-        const authTag = Buffer.from(parts[1], 'hex');
-        const encryptedData = parts[2];
+        const encryptedData = parts[1];
         
-        const decipher = crypto.createDecipher('aes-256-gcm', encryptionKey);
-        decipher.setAAD(iv);
-        decipher.setAuthTag(authTag);
+        const decipher = crypto.createDecipher('aes-256-cbc', encryptionKey);
         
         let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
         decrypted += decipher.final('utf8');
         
         return decrypted;
-      }
-      
-      // Legacy format: try old encryption method as fallback
-      if (parts.length === 2) {
-        console.warn('⚠️ Using legacy credential decryption - user should re-enter credentials');
-        
-        try {
-          const decipher = crypto.createDecipher('aes-256-cbc', encryptionKey);
-          let decrypted = decipher.update(parts[1], 'hex', 'utf8');
-          decrypted += decipher.final('utf8');
-          return decrypted;
-        } catch (legacyError) {
-          console.error('Legacy decryption also failed:', legacyError);
-          throw new Error('Credentials format incompatible - please re-enter LinkedIn credentials');
-        }
       }
       
       throw new Error('Invalid encrypted data format - please re-enter LinkedIn credentials');

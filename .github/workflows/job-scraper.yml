@@ -23,10 +23,14 @@ jobs:
         id: scrape
         run: |
           echo "Calling job scraping API..."
+          echo "API URL: ${{ secrets.RENDER_APP_URL }}/api/jobs/scrape/system"
           
-          response=$(curl -s -w "%{http_code}" -X POST \
+          response=$(curl -s -L -w "%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.SYSTEM_API_KEY }}" \
             -H "Content-Type: application/json" \
+            -H "User-Agent: GitHub-Actions-Job-Scraper/1.0" \
+            --connect-timeout 30 \
+            --max-time 120 \
             -d '{}' \
             "${{ secrets.RENDER_APP_URL }}/api/jobs/scrape/system")
           
@@ -34,16 +38,37 @@ jobs:
           body="${response%???}"
           
           echo "HTTP Status: $http_code"
-          echo "Response: $body"
+          echo "Response Body: $body"
           
           if [ "$http_code" -eq 200 ]; then
             echo "✅ Job scraping completed successfully"
             echo "response_body=$body" >> $GITHUB_OUTPUT
+          elif [ "$http_code" -eq 308 ] || [ "$http_code" -eq 301 ] || [ "$http_code" -eq 302 ]; then
+            echo "🔄 Redirect detected (Status $http_code). URL: $body"
+            echo "❌ Please check your RENDER_APP_URL - it might be missing 'https://' or redirecting"
+            exit 1
           else
             echo "❌ Job scraping failed with status $http_code"
-            echo "Error: $body"
+            echo "Response: $body"
+            
+            # Debug information
+            echo "Debug: Checking if secrets are set..."
+            if [ -z "${{ secrets.RENDER_APP_URL }}" ]; then
+              echo "❌ RENDER_APP_URL secret is not set!"
+            else
+              echo "✅ RENDER_APP_URL is set"
+            fi
+            
+            if [ -z "${{ secrets.SYSTEM_API_KEY }}" ]; then
+              echo "❌ SYSTEM_API_KEY secret is not set!"
+            else
+              echo "✅ SYSTEM_API_KEY is set (first 8 chars: ${SYSTEM_API_KEY:0:8}...)"
+            fi
+            
             exit 1
           fi
+        env:
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
       
       - name: 📊 Log Results
         if: success()
