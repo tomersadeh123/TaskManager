@@ -2,221 +2,198 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-// Types for dashboard data
-interface Task {
+// Types for job data
+interface Job {
   _id: string;
   title: string;
+  company: string;
+  location: string;
+  postingDate: string;
+  postingDays: number;
+  source: 'LinkedIn' | 'Drushim.il';
+  url: string;
   description: string;
-  status: 'completed' | 'in-progress' | 'pending';
-  user: string;
+  searchKeyword: string;
+  scrapedAt: Date;
+  isApplied: boolean;
+  appliedDate?: Date;
+  freshness: string;
+  applicationStatus: string;
 }
 
-interface Chore {
-  _id: string;
-  title: string;
+interface JobStats {
+  totalJobs: number;
+  appliedJobs: number;
+  newJobs: number;
+  linkedinJobs: number;
+  drushimJobs: number;
 }
 
-interface Bill {
-  _id: string;
-  name: string;
-  amount: number;
-}
-
-interface OverviewData {
-  tasks: {
-    total: number;
-    completed: number;
-    pending: number;
-    inProgress: number;
-    completionRate: number;
+interface JobsResponse {
+  jobs: Job[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalJobs: number;
+    hasNext: boolean;
+    hasPrev: boolean;
   };
-  chores: {
-    total: number;
-    overdue: number;
-    dueToday: number;
-    completedThisWeek: number;
-  };
-  bills: {
-    total: number;
-    unpaid: number;
-    overdue: number;
-    upcoming: number;
-    totalUnpaidAmount: number;
-  };
-  grocery: {
-    activeLists: number;
-    totalItems: number;
-    completedItems: number;
-    completionRate: number;
-  };
-  maintenance: {
-    total: number;
-    pending: number;
-    overdue: number;
-    completedThisMonth: number;
-  };
-  recentActivity: {
-    tasks: Task[];
-    chores: Chore[];
-    bills: Bill[];
-  };
+  stats: JobStats;
 }
 import { useRouter } from 'next/navigation';
 import { 
   User, 
   LogOut, 
-  Plus, 
   CheckCircle,
   Home,
-  Calendar,
-  Bell,
   Settings,
-  List,
-  Users,
-  ShoppingCart,
-  DollarSign,
-  Wrench,
   Menu,
-  X
+  X,
+  ArrowRight,
+  Briefcase,
+  Search,
+  MapPin,
+  Clock,
+  ExternalLink,
+  Filter,
+  Play,
+  Target,
+  TrendingUp,
+  Building2,
+  Edit,
+  Save,
+  RotateCcw,
+  Trash2,
+  PlusCircle
 } from 'lucide-react';
-import TaskList from '@/components/TaskList';
-import TaskForm from '@/components/forms/TaskForm';
-import ChoreForm from '@/components/household/ChoreForm';
-import ChoreList from '@/components/household/ChoreList';
-import BillForm from '@/components/household/BillForm';
-import BillList from '@/components/household/BillList';
 
 
-interface Chore {
-  _id: string;
-  title: string;
-  description: string;
-  assignedTo: {
-    _id: string;
-    userName: string;
-  };
-  frequency: string;
-  lastCompleted: Date;
-  nextDue: Date;
-  category: string;
-  estimatedTime: number;
-  priority: string;
-  isActive: boolean;
-}
-
-interface Bill {
-  _id: string;
-  name: string;
-  amount: number;
-  dueDate: Date;
-  category: string;
-  isRecurring: boolean;
-  frequency: string;
-  isPaid: boolean;
-  paidDate?: Date;
-  reminderDays: number;
-  notes?: string;
-  vendor?: string;
-}
 
 export default function Dashboard() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [chores, setChores] = useState<Chore[]>([]);
-  const [bills, setBills] = useState<Bill[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [stats, setStats] = useState<JobStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ id: string; userName: string } | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [overview, setOverview] = useState<OverviewData | null>(null);
+  const [filter] = useState('all'); // 'all', 'unapplied', 'applied', 'recent'
+  const [source, setSource] = useState('all'); // 'all', 'LinkedIn', 'Drushim.il'
+  const [scraping, setScraping] = useState(false);
+  const [searchConfig, setSearchConfig] = useState({
+    linkedin: [
+      'solution engineer Israel',
+      'technical consultant Israel',
+      'product manager Israel'
+    ],
+    drushim: [
+      { position: 'Product Manager', experience: '0-2' },
+      { position: 'Solution Engineer', experience: '0-2' },
+      { position: 'Technical Consultant', experience: '0-2' }
+    ]
+  });
+  const [editingConfig, setEditingConfig] = useState(false);
   const router = useRouter();
 
-  const fetchTasks = useCallback(async () => {
+  const fetchJobs = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/tasks', {
+      const params = new URLSearchParams();
+      if (filter !== 'all') params.set('filter', filter);
+      if (source !== 'all') params.set('source', source);
+      params.set('limit', '50');
+      
+      const response = await fetch(`/api/jobs?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setTasks(data.result || []);
+        const data: { result: JobsResponse } = await response.json();
+        setJobs(data.result.jobs || []);
+        setStats(data.result.stats || null);
       } else if (response.status === 401) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         router.push('/login');
       }
     } catch (error) {
-      console.error('Error fetching tasks:', error);
+      console.error('Error fetching jobs:', error);
     }
-  }, [router]);
+  }, [router, filter, source]);
 
-  const fetchChores = useCallback(async () => {
+  const triggerJobScraping = async () => {
+    setScraping(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/chores', {
+      const response = await fetch('/api/jobs/scrape', {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ searchConfig }) // Use user's custom config
       });
 
       if (response.ok) {
         const data = await response.json();
-        setChores(data.result || []);
-      } else if (response.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        router.push('/login');
+        alert(`✅ Job scraping completed! Found ${data.result.jobCount} new jobs.`);
+        fetchJobs(); // Refresh jobs list
+      } else {
+        const error = await response.json();
+        alert(`❌ Job scraping failed: ${error.message}`);
       }
     } catch (error) {
-      console.error('Error fetching chores:', error);
+      console.error('Error triggering job scraping:', error);
+      alert('❌ Failed to start job scraping');
+    } finally {
+      setScraping(false);
     }
-  }, [router]);
+  };
 
-  const fetchBills = useCallback(async () => {
+  const markJobAsApplied = async (jobId: string, isApplied: boolean) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/bills', {
+      const response = await fetch(`/api/jobs/${jobId}`, {
+        method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ isApplied })
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setBills(data.result || []);
-      } else if (response.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        router.push('/login');
+        fetchJobs(); // Refresh jobs list
+      } else {
+        console.error('Failed to update job status');
       }
     } catch (error) {
-      console.error('Error fetching bills:', error);
+      console.error('Error updating job:', error);
     }
-  }, [router]);
+  };
 
-  const fetchOverview = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/dashboard/overview', {
-        headers: {
-          'Authorization': `Bearer ${token}`
+  const deleteJob = async (jobId: string) => {
+    if (confirm('Are you sure you want to delete this job?')) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/jobs/${jobId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          fetchJobs(); // Refresh jobs list
+        } else {
+          console.error('Failed to delete job');
         }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setOverview(data.result);
-      } else if (response.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        router.push('/login');
+      } catch (error) {
+        console.error('Error deleting job:', error);
       }
-    } catch (error) {
-      console.error('Error fetching overview:', error);
     }
-  }, [router]);
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -231,220 +208,52 @@ export default function Dashboard() {
       setUser(JSON.parse(userData));
     }
 
-    Promise.all([fetchTasks(), fetchChores(), fetchBills(), fetchOverview()]).finally(() => {
+    // Load saved search configuration
+    const savedConfig = localStorage.getItem('jobSearchConfig');
+    if (savedConfig) {
+      try {
+        setSearchConfig(JSON.parse(savedConfig));
+      } catch {
+        console.log('Error loading saved search config, using defaults');
+      }
+    }
+
+    fetchJobs().finally(() => {
       setLoading(false);
     });
-  }, [router, fetchTasks, fetchChores, fetchBills, fetchOverview]);
+  }, [router, fetchJobs]);
 
 
-  const handleTaskCreate = async (taskData: { title: string; description: string; status: string }) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(taskData)
-      });
+  const handleSourceChange = (newSource: string) => {
+    setSource(newSource);
+  };
 
-      if (response.ok) {
-        fetchTasks(); // Refresh tasks
-      }
-    } catch (error) {
-      console.error('Error creating task:', error);
+  // Refresh jobs when filters change
+  useEffect(() => {
+    if (!loading) {
+      fetchJobs();
+    }
+  }, [filter, source, fetchJobs, loading]);
+
+  // Job actions
+  const openJobUrl = (url: string) => {
+    window.open(url, '_blank');
+  };
+
+  const getFreshnessColor = (freshness: string) => {
+    switch (freshness) {
+      case 'Today': return 'bg-green-100 text-green-800';
+      case 'Yesterday': return 'bg-blue-100 text-blue-800';
+      case 'Hot': return 'bg-orange-100 text-orange-800';
+      case 'This Week': return 'bg-purple-100 text-purple-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const handleTaskUpdate = async (taskId: string, updates: Partial<Task>) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updates)
-      });
-
-      if (response.ok) {
-        fetchTasks(); // Refresh tasks
-      }
-    } catch (error) {
-      console.error('Error updating task:', error);
-    }
+  const getSourceIcon = (source: string) => {
+    return source === 'LinkedIn' ? '💼' : '🇮🇱';
   };
 
-  const handleTaskDelete = async (taskId: string) => {
-    if (confirm('Are you sure you want to delete this task?')) {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`/api/tasks/${taskId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          fetchTasks(); // Refresh tasks
-        }
-      } catch (error) {
-        console.error('Error deleting task:', error);
-      }
-    }
-  };
-
-  const handleChoreCreate = async (choreData: {
-    title: string;
-    description: string;
-    frequency: string;
-    category: string;
-    estimatedTime: number;
-    priority: string;
-  }) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/chores', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(choreData)
-      });
-
-      if (response.ok) {
-        fetchChores(); // Refresh chores list
-      } else {
-        console.error('Failed to create chore');
-      }
-    } catch (error) {
-      console.error('Error creating chore:', error);
-    }
-  };
-
-  const handleChoreUpdate = async (choreId: string, updates: Partial<Chore>) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/chores/${choreId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updates)
-      });
-
-      if (response.ok) {
-        fetchChores(); // Refresh chores list
-      } else {
-        console.error('Failed to update chore');
-      }
-    } catch (error) {
-      console.error('Error updating chore:', error);
-    }
-  };
-
-  const handleChoreDelete = async (choreId: string) => {
-    if (confirm('Are you sure you want to delete this chore?')) {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`/api/chores/${choreId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          fetchChores(); // Refresh chores list
-        } else {
-          console.error('Failed to delete chore');
-        }
-      } catch (error) {
-        console.error('Error deleting chore:', error);
-      }
-    }
-  };
-
-  const handleBillCreate = async (billData: {
-    name: string;
-    amount: number;
-    dueDate: string;
-    category: string;
-    isRecurring: boolean;
-    frequency: string;
-    reminderDays: number;
-    notes: string;
-    vendor: string;
-  }) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/bills', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(billData)
-      });
-
-      if (response.ok) {
-        fetchBills(); // Refresh bills list
-      } else {
-        console.error('Failed to create bill');
-      }
-    } catch (error) {
-      console.error('Error creating bill:', error);
-    }
-  };
-
-  const handleBillUpdate = async (billId: string, updates: Partial<Bill>) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/bills/${billId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updates)
-      });
-
-      if (response.ok) {
-        fetchBills(); // Refresh bills list
-      } else {
-        console.error('Failed to update bill');
-      }
-    } catch (error) {
-      console.error('Error updating bill:', error);
-    }
-  };
-
-  const handleBillDelete = async (billId: string) => {
-    if (confirm('Are you sure you want to delete this bill?')) {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`/api/bills/${billId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          fetchBills(); // Refresh bills list
-        } else {
-          console.error('Failed to delete bill');
-        }
-      } catch (error) {
-        console.error('Error deleting bill:', error);
-      }
-    }
-  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -493,20 +302,18 @@ export default function Dashboard() {
   // const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length;
 
   const sidebarItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'dashboard', label: 'Job Dashboard', icon: Home },
+    { id: 'search', label: 'Job Search', icon: Search },
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: Home },
-    { id: 'tasks', label: 'Tasks', icon: List },
-    { id: 'chores', label: 'Chores', icon: Users },
-    { id: 'grocery', label: 'Grocery', icon: ShoppingCart },
-    { id: 'bills', label: 'Bills', icon: DollarSign },
-    { id: 'maintenance', label: 'Maintenance', icon: Wrench },
+    { id: 'overview', label: 'Overview', icon: TrendingUp },
+    { id: 'jobs', label: 'All Jobs', icon: Briefcase },
+    { id: 'unapplied', label: 'Not Applied', icon: Target },
+    { id: 'applied', label: 'Applied', icon: CheckCircle },
+    { id: 'scraper', label: 'Job Scraper', icon: Search },
   ];
 
   const renderTabContent = () => {
@@ -515,167 +322,180 @@ export default function Dashboard() {
         return (
           <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-6 border border-white/20 dark:border-slate-700/30">
-                <div className="flex items-center">
-                  <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl mr-4">
-                    <CheckCircle className="w-6 h-6 text-white" />
+              <div className="group bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-6 border border-white/20 dark:border-slate-700/30 hover:bg-white/70 dark:hover:bg-slate-800/70 transition-all duration-300 cursor-pointer" onClick={() => setActiveTab('jobs')}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl mr-4 group-hover:scale-110 transition-transform">
+                      <Briefcase className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                        {stats?.totalJobs || 0}
+                      </p>
+                      <p className="text-slate-600 dark:text-slate-400 font-medium">Total Jobs</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-500">
+                        Found opportunities
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                      {overview?.tasks?.total || 0}
-                    </p>
-                    <p className="text-slate-600 dark:text-slate-400 font-medium">Total Tasks</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-500">
-                      {overview?.tasks?.completionRate || 0}% complete
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-6 border border-white/20 dark:border-slate-700/30">
-                <div className="flex items-center">
-                  <div className="p-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl mr-4">
-                    <Users className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                      {overview?.chores?.total || 0}
-                    </p>
-                    <p className="text-slate-600 dark:text-slate-400 font-medium">Active Chores</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-500">
-                      {overview?.chores?.overdue || 0} overdue
-                    </p>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ArrowRight className="w-5 h-5 text-slate-400" />
                   </div>
                 </div>
               </div>
               
-              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-6 border border-white/20 dark:border-slate-700/30">
-                <div className="flex items-center">
-                  <div className="p-3 bg-gradient-to-r from-red-500 to-pink-600 rounded-2xl mr-4">
-                    <DollarSign className="w-6 h-6 text-white" />
+              <div className="group bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-6 border border-white/20 dark:border-slate-700/30 hover:bg-white/70 dark:hover:bg-slate-800/70 transition-all duration-300 cursor-pointer" onClick={() => setActiveTab('unapplied')}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="p-3 bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl mr-4 group-hover:scale-110 transition-transform">
+                      <Target className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                        {stats ? (stats.totalJobs - stats.appliedJobs) : 0}
+                      </p>
+                      <p className="text-slate-600 dark:text-slate-400 font-medium">Not Applied</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-500">
+                        Ready to apply
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                      {overview?.bills?.unpaid || 0}
-                    </p>
-                    <p className="text-slate-600 dark:text-slate-400 font-medium">Unpaid Bills</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-500">
-                      ${(overview?.bills?.totalUnpaidAmount || 0).toFixed(2)}
-                    </p>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ArrowRight className="w-5 h-5 text-slate-400" />
                   </div>
                 </div>
               </div>
               
-              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-6 border border-white/20 dark:border-slate-700/30">
-                <div className="flex items-center">
-                  <div className="p-3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-2xl mr-4">
-                    <Wrench className="w-6 h-6 text-white" />
+              <div className="group bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-6 border border-white/20 dark:border-slate-700/30 hover:bg-white/70 dark:hover:bg-slate-800/70 transition-all duration-300 cursor-pointer" onClick={() => setActiveTab('applied')}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="p-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl mr-4 group-hover:scale-110 transition-transform">
+                      <CheckCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                        {stats?.appliedJobs || 0}
+                      </p>
+                      <p className="text-slate-600 dark:text-slate-400 font-medium">Applied</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-500">
+                        Applications sent
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                      {overview?.maintenance?.pending || 0}
-                    </p>
-                    <p className="text-slate-600 dark:text-slate-400 font-medium">Pending Maintenance</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-500">
-                      {overview?.maintenance?.overdue || 0} overdue
-                    </p>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ArrowRight className="w-5 h-5 text-slate-400" />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="group bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-6 border border-white/20 dark:border-slate-700/30 hover:bg-white/70 dark:hover:bg-slate-800/70 transition-all duration-300 cursor-pointer" onClick={() => setActiveTab('scraper')}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="p-3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-2xl mr-4 group-hover:scale-110 transition-transform">
+                      <Search className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                        {stats?.newJobs || 0}
+                      </p>
+                      <p className="text-slate-600 dark:text-slate-400 font-medium">New Jobs</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-500">
+                        Recent finds
+                      </p>
+                    </div>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ArrowRight className="w-5 h-5 text-slate-400" />
                   </div>
                 </div>
               </div>
             </div>
-            
+
+            {/* Job Sources Summary */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">Today&apos;s Focus</h3>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">🎯 Job Sources</h3>
                 <div className="space-y-4">
-                  {(overview?.chores?.dueToday || 0) > 0 && (
-                    <div className="flex items-center p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl">
-                      <Users className="w-5 h-5 text-amber-600 mr-3" />
+                  <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
+                    <div className="flex items-center">
+                      <Building2 className="w-6 h-6 text-blue-600 mr-3" />
                       <div>
-                        <p className="font-medium text-slate-900 dark:text-slate-100">
-                          {overview?.chores.dueToday} chores due today
-                        </p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          Don&apos;t forget your household tasks!
-                        </p>
+                        <p className="font-medium text-slate-900 dark:text-slate-100">LinkedIn</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">Professional Network</p>
                       </div>
                     </div>
-                  )}
+                    <div className="text-2xl font-bold text-blue-600">
+                      {stats?.linkedinJobs || 0}
+                    </div>
+                  </div>
                   
-                  {(overview?.bills?.upcoming || 0) > 0 && (
-                    <div className="flex items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
-                      <DollarSign className="w-5 h-5 text-blue-600 mr-3" />
+                  <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-2xl">
+                    <div className="flex items-center">
+                      <Briefcase className="w-6 h-6 text-green-600 mr-3" />
                       <div>
-                        <p className="font-medium text-slate-900 dark:text-slate-100">
-                          {overview?.bills.upcoming} bills due this week
-                        </p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          Plan your payments ahead
-                        </p>
+                        <p className="font-medium text-slate-900 dark:text-slate-100">Drushim.il</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">Israeli Job Portal</p>
                       </div>
                     </div>
-                  )}
-                  
-                  {(overview?.grocery?.activeLists || 0) > 0 && (
-                    <div className="flex items-center p-4 bg-green-50 dark:bg-green-900/20 rounded-2xl">
-                      <ShoppingCart className="w-5 h-5 text-green-600 mr-3" />
-                      <div>
-                        <p className="font-medium text-slate-900 dark:text-slate-100">
-                          {overview?.grocery.activeLists} active grocery lists
-                        </p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          {overview?.grocery.completionRate}% items completed
-                        </p>
-                      </div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {stats?.drushimJobs || 0}
                     </div>
-                  )}
-                  
-                  {(!(overview?.chores?.dueToday || 0) && !(overview?.bills?.upcoming || 0) && !(overview?.grocery?.activeLists || 0)) && (
-                    <div className="text-center py-8">
-                      <div className="w-16 h-16 bg-gradient-to-r from-green-400 to-blue-500 rounded-full mx-auto mb-4 flex items-center justify-center">
-                        <CheckCircle className="w-8 h-8 text-white" />
-                      </div>
-                      <p className="text-slate-600 dark:text-slate-400">All caught up! 🎉</p>
+                  </div>
+                </div>
+                
+                <div className="mt-6 p-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Success Rate</p>
+                      <p className="text-2xl font-bold">
+                        {stats && stats.totalJobs > 0 ? Math.round((stats.appliedJobs / stats.totalJobs) * 100) : 0}%
+                      </p>
                     </div>
-                  )}
+                    <TrendingUp className="w-8 h-8 opacity-80" />
+                  </div>
                 </div>
               </div>
               
               <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">Recent Activity</h3>
-                <div className="space-y-4">
-                  {(overview?.recentActivity?.tasks?.length || 0) > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Tasks</h4>
-                      {overview?.recentActivity.tasks.slice(0, 3).map((task: Task) => (
-                        <div key={task._id} className="flex items-center py-2">
-                          <div className={`w-2 h-2 rounded-full mr-3 ${
-                            task.status === 'completed' ? 'bg-green-500' : 
-                            task.status === 'in-progress' ? 'bg-blue-500' : 'bg-slate-400'
-                          }`}></div>
-                          <span className="text-sm text-slate-600 dark:text-slate-400">{task.title}</span>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">🚀 Recent Jobs</h3>
+                <div className="space-y-3 max-h-80 overflow-y-auto">
+                  {jobs.slice(0, 5).map((job) => (
+                    <div key={job._id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/30 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm">{getSourceIcon(job.source)}</span>
+                          <h4 className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                            {job.title}
+                          </h4>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {(overview?.recentActivity?.chores?.length || 0) > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Chores</h4>
-                      {overview?.recentActivity.chores.slice(0, 3).map((chore: Chore) => (
-                        <div key={chore._id} className="flex items-center py-2">
-                          <div className="w-2 h-2 rounded-full bg-green-500 mr-3"></div>
-                          <span className="text-sm text-slate-600 dark:text-slate-400">
-                            {chore.title} completed
+                        <p className="text-xs text-slate-600 dark:text-slate-400">
+                          {job.company} • {job.location}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-xs px-2 py-1 rounded-full ${getFreshnessColor(job.freshness)}`}>
+                            {job.freshness}
                           </span>
+                          {job.isApplied && (
+                            <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">
+                              Applied
+                            </span>
+                          )}
                         </div>
-                      ))}
+                      </div>
+                      <button
+                        onClick={() => openJobUrl(job.url)}
+                        className="p-2 text-slate-400 hover:text-blue-600 transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </button>
                     </div>
-                  )}
+                  ))}
                   
-                  {(!(overview?.recentActivity?.tasks?.length || 0) && !(overview?.recentActivity?.chores?.length || 0)) && (
+                  {jobs.length === 0 && (
                     <div className="text-center py-8 text-slate-600 dark:text-slate-400">
-                      No recent activity to display
+                      <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p>No jobs found yet</p>
+                      <p className="text-sm">Start by running the job scraper</p>
                     </div>
                   )}
                 </div>
@@ -683,157 +503,442 @@ export default function Dashboard() {
             </div>
           </div>
         );
-      case 'tasks':
+
+      case 'jobs':
+      case 'unapplied':  
+      case 'applied':
+        const filteredJobs = jobs.filter(job => {
+          if (activeTab === 'unapplied') return !job.isApplied;
+          if (activeTab === 'applied') return job.isApplied;
+          return true; // 'jobs' shows all
+        });
+
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1">
-              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30 sticky top-8">
-                <div className="flex items-center mb-6">
-                  <div className="p-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl mr-4">
-                    <Plus className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Create Task</h2>
-                    <p className="text-slate-600 dark:text-slate-400">Add a new task</p>
+          <div className="space-y-6">
+            {/* Filters */}
+            <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/20 dark:border-slate-700/30">
+              <div className="flex flex-wrap gap-4 items-center">
+                <div className="flex items-center gap-2">
+                  <Filter className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                  <span className="font-medium text-slate-900 dark:text-slate-100">Filters:</span>
+                </div>
+                
+                <select
+                  value={source}
+                  onChange={(e) => handleSourceChange(e.target.value)}
+                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                >
+                  <option value="all">All Sources</option>
+                  <option value="LinkedIn">LinkedIn</option>
+                  <option value="Drushim.il">Drushim.il</option>
+                </select>
+                
+                <button
+                  onClick={fetchJobs}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                >
+                  Refresh
+                </button>
+                
+                <div className="ml-auto text-sm text-slate-600 dark:text-slate-400">
+                  Showing {filteredJobs.length} jobs
+                </div>
+              </div>
+            </div>
+
+            {/* Jobs List */}
+            <div className="grid grid-cols-1 gap-4">
+              {filteredJobs.map((job) => (
+                <div key={job._id} className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/20 dark:border-slate-700/30 hover:bg-white/70 dark:hover:bg-slate-800/70 transition-all duration-200">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-lg">{getSourceIcon(job.source)}</span>
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                          {job.title}
+                        </h3>
+                        <span className={`text-xs px-2 py-1 rounded-full ${getFreshnessColor(job.freshness)}`}>
+                          {job.freshness}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 mb-3 text-slate-600 dark:text-slate-400">
+                        <div className="flex items-center gap-1">
+                          <Building2 className="w-4 h-4" />
+                          <span>{job.company}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-4 h-4" />
+                          <span>{job.location}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-4 h-4" />
+                          <span>{job.postingDate}</span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="font-medium">{job.source}</span>
+                        </div>
+                      </div>
+                      
+                      {job.description && (
+                        <p className="text-slate-600 dark:text-slate-400 text-sm mb-3 line-clamp-2">
+                          {job.description}
+                        </p>
+                      )}
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                          {job.searchKeyword}
+                        </span>
+                        {job.isApplied && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">
+                            ✅ Applied {job.appliedDate ? new Date(job.appliedDate).toLocaleDateString() : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-2 ml-4">
+                      <button
+                        onClick={() => openJobUrl(job.url)}
+                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        View Job
+                      </button>
+                      
+                      <button
+                        onClick={() => markJobAsApplied(job._id, !job.isApplied)}
+                        className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                          job.isApplied 
+                            ? 'bg-gray-500 hover:bg-gray-600 text-white' 
+                            : 'bg-green-500 hover:bg-green-600 text-white'
+                        }`}
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        {job.isApplied ? 'Undo' : 'Mark Applied'}
+                      </button>
+                      
+                      <button
+                        onClick={() => deleteJob(job._id)}
+                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <TaskForm onTaskCreate={handleTaskCreate} />
+              ))}
+              
+              {filteredJobs.length === 0 && (
+                <div className="text-center py-12">
+                  <Briefcase className="w-16 h-16 mx-auto mb-4 text-slate-400" />
+                  <h3 className="text-xl font-medium text-slate-900 dark:text-slate-100 mb-2">
+                    No jobs found
+                  </h3>
+                  <p className="text-slate-600 dark:text-slate-400 mb-4">
+                    {activeTab === 'applied' 
+                      ? "You haven't applied to any jobs yet"
+                      : activeTab === 'unapplied'
+                      ? "No unapplied jobs available"
+                      : "No jobs in your list yet"}
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('scraper')}
+                    className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                  >
+                    Start Job Search
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'scraper':
+        const addLinkedInKeyword = () => {
+          setSearchConfig(prev => ({
+            ...prev,
+            linkedin: [...prev.linkedin, '']
+          }));
+        };
+
+        const removeLinkedInKeyword = (index: number) => {
+          setSearchConfig(prev => ({
+            ...prev,
+            linkedin: prev.linkedin.filter((_, i) => i !== index)
+          }));
+        };
+
+        const updateLinkedInKeyword = (index: number, value: string) => {
+          setSearchConfig(prev => ({
+            ...prev,
+            linkedin: prev.linkedin.map((keyword, i) => i === index ? value : keyword)
+          }));
+        };
+
+        const addDrushimSearch = () => {
+          setSearchConfig(prev => ({
+            ...prev,
+            drushim: [...prev.drushim, { position: '', experience: '0-2' }]
+          }));
+        };
+
+        const removeDrushimSearch = (index: number) => {
+          setSearchConfig(prev => ({
+            ...prev,
+            drushim: prev.drushim.filter((_, i) => i !== index)
+          }));
+        };
+
+        const updateDrushimSearch = (index: number, field: 'position' | 'experience', value: string) => {
+          setSearchConfig(prev => ({
+            ...prev,
+            drushim: prev.drushim.map((search, i) => 
+              i === index ? { ...search, [field]: value } : search
+            )
+          }));
+        };
+
+        const resetToDefaults = () => {
+          setSearchConfig({
+            linkedin: [
+              'solution engineer Israel',
+              'technical consultant Israel', 
+              'product manager Israel'
+            ],
+            drushim: [
+              { position: 'Product Manager', experience: '0-2' },
+              { position: 'Solution Engineer', experience: '0-2' },
+              { position: 'Technical Consultant', experience: '0-2' }
+            ]
+          });
+          setEditingConfig(false);
+        };
+
+        const saveConfiguration = () => {
+          // Filter out empty LinkedIn keywords
+          const cleanConfig = {
+            ...searchConfig,
+            linkedin: searchConfig.linkedin.filter(keyword => keyword.trim() !== ''),
+            drushim: searchConfig.drushim.filter(search => search.position.trim() !== '')
+          };
+          setSearchConfig(cleanConfig);
+          setEditingConfig(false);
+          // Optionally save to localStorage or database
+          localStorage.setItem('jobSearchConfig', JSON.stringify(cleanConfig));
+        };
+
+        return (
+          <div className="space-y-8">
+            <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className="p-3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-2xl mr-4">
+                    <Search className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Job Scraper</h2>
+                    <p className="text-slate-600 dark:text-slate-400">Find new job opportunities automatically</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEditingConfig(!editingConfig)}
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <Edit className="w-4 h-4" />
+                    {editingConfig ? 'Cancel' : 'Edit Config'}
+                  </button>
+                  {editingConfig && (
+                    <>
+                      <button
+                        onClick={saveConfiguration}
+                        className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <Save className="w-4 h-4" />
+                        Save
+                      </button>
+                      <button
+                        onClick={resetToDefaults}
+                        className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Reset
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    💼 LinkedIn Keywords
+                    {editingConfig && (
+                      <button
+                        onClick={addLinkedInKeyword}
+                        className="p-1 text-blue-500 hover:text-blue-600 transition-colors"
+                        title="Add keyword"
+                      >
+                        <PlusCircle className="w-5 h-5" />
+                      </button>
+                    )}
+                  </h3>
+                  <div className="space-y-3">
+                    {searchConfig.linkedin.map((keyword, index) => (
+                      <div key={index} className="p-4 bg-slate-50 dark:bg-slate-700/30 rounded-xl">
+                        {editingConfig ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={keyword}
+                              onChange={(e) => updateLinkedInKeyword(index, e.target.value)}
+                              className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter LinkedIn search keyword"
+                            />
+                            <button
+                              onClick={() => removeLinkedInKeyword(index)}
+                              className="p-2 text-red-500 hover:text-red-600 transition-colors"
+                              title="Remove keyword"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-slate-600 dark:text-slate-400">
+                            • {keyword}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    🇮🇱 Drushim.il Searches
+                    {editingConfig && (
+                      <button
+                        onClick={addDrushimSearch}
+                        className="p-1 text-blue-500 hover:text-blue-600 transition-colors"
+                        title="Add search"
+                      >
+                        <PlusCircle className="w-5 h-5" />
+                      </button>
+                    )}
+                  </h3>
+                  <div className="space-y-3">
+                    {searchConfig.drushim.map((search, index) => (
+                      <div key={index} className="p-4 bg-slate-50 dark:bg-slate-700/30 rounded-xl">
+                        {editingConfig ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={search.position}
+                                onChange={(e) => updateDrushimSearch(index, 'position', e.target.value)}
+                                className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Job position"
+                              />
+                              <button
+                                onClick={() => removeDrushimSearch(index)}
+                                className="p-2 text-red-500 hover:text-red-600 transition-colors"
+                                title="Remove search"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <select
+                              value={search.experience}
+                              onChange={(e) => updateDrushimSearch(index, 'experience', e.target.value)}
+                              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="0-2">0-2 years experience</option>
+                              <option value="2-5">2-5 years experience</option>
+                              <option value="5-10">5-10 years experience</option>
+                              <option value="10+">10+ years experience</option>
+                              <option value="any">Any experience</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-slate-600 dark:text-slate-400">
+                            • {search.position} ({search.experience} years)
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
             
-            <div className="lg:col-span-2">
-              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center">
-                    <div className="p-3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-2xl mr-4">
-                      <List className="w-6 h-6 text-white" />
+            {/* Run Job Search Section */}
+            <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">🚀 Run Job Search</h3>
+                  <div className="p-6 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl text-white">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h4 className="text-lg font-bold">Automatic Job Search</h4>
+                        <p className="text-sm opacity-90">Scan LinkedIn & Drushim for new opportunities</p>
+                      </div>
+                      <Play className="w-8 h-8 opacity-80" />
                     </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Your Tasks</h2>
-                      <p className="text-slate-600 dark:text-slate-400">{tasks.length} tasks in total</p>
-                    </div>
+                    
+                    <button
+                      onClick={triggerJobScraping}
+                      disabled={scraping || editingConfig}
+                      className={`w-full py-3 px-6 rounded-lg font-medium transition-all ${
+                        scraping || editingConfig
+                          ? 'bg-white/20 cursor-not-allowed' 
+                          : 'bg-white/20 hover:bg-white/30 active:scale-95'
+                      }`}
+                    >
+                      {scraping ? (
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                          Searching for jobs...
+                        </div>
+                      ) : editingConfig ? (
+                        'Save configuration first'
+                      ) : (
+                        'Start Job Search'
+                      )}
+                    </button>
+                    
+                    {editingConfig && (
+                      <p className="text-xs opacity-75 mt-2 text-center">
+                        Please save your configuration before running the search
+                      </p>
+                    )}
                   </div>
                 </div>
-                <TaskList 
-                  tasks={tasks} 
-                  onTaskUpdate={handleTaskUpdate}
-                  onTaskDelete={handleTaskDelete}
-                />
-              </div>
-            </div>
-          </div>
-        );
-      case 'chores':
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1">
-              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30 sticky top-8">
-                <div className="flex items-center mb-6">
-                  <div className="p-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl mr-4">
-                    <Plus className="w-6 h-6 text-white" />
+                
+                <div className="space-y-4">
+                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
+                    <h4 className="font-medium text-yellow-800 dark:text-yellow-300 mb-2">📧 Email Notifications</h4>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                      You&apos;ll receive an email report with all new jobs found.
+                    </p>
                   </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Create Chore</h2>
-                    <p className="text-slate-600 dark:text-slate-400">Add a new chore</p>
+                  
+                  <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                    <h4 className="font-medium text-green-800 dark:text-green-300 mb-2">🎯 Smart Filtering</h4>
+                    <p className="text-sm text-green-700 dark:text-green-400">
+                      Only new jobs are added - duplicates filtered out.
+                    </p>
                   </div>
-                </div>
-                <ChoreForm onChoreCreate={handleChoreCreate} />
-              </div>
-            </div>
-            
-            <div className="lg:col-span-2">
-              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center">
-                    <div className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl mr-4">
-                      <Users className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Household Chores</h2>
-                      <p className="text-slate-600 dark:text-slate-400">{chores.length} chores in total</p>
-                    </div>
+                  
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                    <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">⚙️ Custom Configuration</h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-400">
+                      Using your personalized search keywords and filters.
+                    </p>
                   </div>
                 </div>
-                <ChoreList 
-                  chores={chores} 
-                  onChoreUpdate={handleChoreUpdate}
-                  onChoreDelete={handleChoreDelete}
-                />
               </div>
-            </div>
-          </div>
-        );
-      case 'grocery':
-        return (
-          <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
-            <div className="flex items-center mb-6">
-              <div className="p-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl mr-4">
-                <ShoppingCart className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Grocery Lists</h2>
-                <p className="text-slate-600 dark:text-slate-400">Manage your grocery shopping</p>
-              </div>
-            </div>
-            <div className="text-slate-600 dark:text-slate-400 text-center py-16">
-              Grocery list feature coming soon! 🛒
-            </div>
-          </div>
-        );
-      case 'bills':
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1">
-              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30 sticky top-8">
-                <div className="flex items-center mb-6">
-                  <div className="p-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl mr-4">
-                    <Plus className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Add Bill</h2>
-                    <p className="text-slate-600 dark:text-slate-400">Track a new bill</p>
-                  </div>
-                </div>
-                <BillForm onBillCreate={handleBillCreate} />
-              </div>
-            </div>
-            
-            <div className="lg:col-span-2">
-              <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center">
-                    <div className="p-3 bg-gradient-to-r from-red-500 to-pink-600 rounded-2xl mr-4">
-                      <DollarSign className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Bills & Payments</h2>
-                      <p className="text-slate-600 dark:text-slate-400">{bills.length} bills tracked</p>
-                    </div>
-                  </div>
-                </div>
-                <BillList 
-                  bills={bills} 
-                  onBillUpdate={handleBillUpdate}
-                  onBillDelete={handleBillDelete}
-                />
-              </div>
-            </div>
-          </div>
-        );
-      case 'maintenance':
-        return (
-          <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
-            <div className="flex items-center mb-6">
-              <div className="p-3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-2xl mr-4">
-                <Wrench className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Maintenance Tasks</h2>
-                <p className="text-slate-600 dark:text-slate-400">Keep track of home maintenance</p>
-              </div>
-            </div>
-            <div className="text-slate-600 dark:text-slate-400 text-center py-16">
-              Maintenance tracking feature coming soon! 🔧
             </div>
           </div>
         );
@@ -851,7 +956,7 @@ export default function Dashboard() {
             <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl mr-3">
               <Home className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Household</h1>
+            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Job Hunter</h1>
           </div>
           <button
             onClick={() => setIsSidebarOpen(false)}
@@ -884,7 +989,7 @@ export default function Dashboard() {
                 <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
                   {user?.userName || 'User'}
                 </p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Household Admin</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Job Seeker</p>
               </div>
             </div>
             <button
@@ -916,15 +1021,12 @@ export default function Dashboard() {
                     Welcome back, {user?.userName || 'User'}!
                   </h1>
                   <p className="text-slate-600 dark:text-slate-400">
-                    Manage your household efficiently
+                    Track your job applications and opportunities
                   </p>
                 </div>
               </div>
               <div className="flex items-center space-x-4">
-                <button className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 relative">
-                  <Bell className="w-6 h-6 text-slate-600 dark:text-slate-400" />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
-                </button>
+                {/* Future: Add notification bell */}
               </div>
             </div>
           </div>

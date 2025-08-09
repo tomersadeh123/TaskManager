@@ -27,9 +27,9 @@ export async function GET(request: NextRequest) {
 
     // Verify token
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
-      logger.logAuth('tasks_access_failed', decoded.id, false, {
+      logger.logAuth('tasks_access_failed', decoded.userId, false, {
         reason: 'user_not_found',
         requestId
       });
@@ -84,9 +84,9 @@ export async function POST(request: NextRequest) {
 
     // Verify token
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
-      logger.logAuth('task_creation_failed', decoded.id, false, {
+      logger.logAuth('task_creation_failed', decoded.userId, false, {
         reason: 'user_not_found',
         requestId
       });

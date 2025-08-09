@@ -61,9 +61,6 @@ class Logger {
     }
   }
 
-  private generateRequestId(): string {
-    return Math.random().toString(36).substr(2, 9);
-  }
 
   private createLogEntry(
     level: LogLevel,
@@ -270,7 +267,7 @@ export function withLogging(
         const { verifyToken } = await import('../utils/jwt');
         const decoded = verifyToken(token);
         if (decoded) {
-          userId = decoded.id;
+          userId = decoded.userId;
         }
       }
     } catch {

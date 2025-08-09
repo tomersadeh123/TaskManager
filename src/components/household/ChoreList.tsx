@@ -266,7 +266,7 @@ export default function ChoreList({ chores, onChoreUpdate, onChoreDelete }: Chor
                       </div>
                       <div className="flex items-center">
                         <Calendar className="w-4 h-4 mr-1" />
-                        <span>Every {chore.frequency}</span>
+                        <span>{chore.frequency}</span>
                       </div>
                       <div className="flex items-center">
                         <Clock className="w-4 h-4 mr-1" />

@@ -32,11 +32,11 @@ export async function GET(request: NextRequest) {
     // Verify token
     const decoded = verifyToken(token);
     const dbStart = Date.now();
-    const user = await User.findById(decoded.id).select('-password');
+    const user = await User.findById(decoded.userId).select('-password');
     const dbDuration = Date.now() - dbStart;
     
     if (!user) {
-      logger.logAuth('profile_access_failed', decoded.id, false, {
+      logger.logAuth('profile_access_failed', decoded.userId, false, {
         reason: 'user_not_found',
         requestId,
         dbDuration
@@ -79,7 +79,7 @@ export async function PUT(request: NextRequest) {
 
     // Verify token
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }

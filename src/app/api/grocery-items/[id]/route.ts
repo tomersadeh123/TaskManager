@@ -20,7 +20,7 @@ export async function PUT(
     }
 
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }
@@ -110,7 +110,7 @@ export async function DELETE(
     }
 
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }

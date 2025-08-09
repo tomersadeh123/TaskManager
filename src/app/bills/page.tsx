@@ -6,6 +6,8 @@ import { ArrowLeft, Plus, DollarSign, Calendar, AlertTriangle } from 'lucide-rea
 import BillList from '@/components/household/BillList';
 import BillForm from '@/components/household/BillForm';
 import { clientLogger } from '@/lib/client-logger';
+import NotificationBell from '@/components/NotificationBell';
+import QuickNavigation from '@/components/QuickNavigation';
 
 interface Bill {
   _id: string;
@@ -26,6 +28,9 @@ export default function BillsPage() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  
+  // Initialize notifications
 
   const fetchBills = useCallback(async () => {
     try {
@@ -52,12 +57,14 @@ export default function BillsPage() {
   }, [router]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const storedToken = localStorage.getItem('token');
     
-    if (!token) {
+    if (!storedToken) {
       router.push('/login');
       return;
     }
+
+    // Set token and user ID for notifications
 
     fetchBills();
   }, [router, fetchBills]);
@@ -180,15 +187,19 @@ export default function BillsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={handleGoBack}
-            className="group inline-flex items-center text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 mb-6 transition-all duration-200"
-          >
-            <div className="p-2 rounded-xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors mr-3">
-              <ArrowLeft className="w-4 h-4" />
-            </div>
-            <span className="font-medium">Back to Dashboard</span>
-          </button>
+          <div className="flex items-center justify-between mb-6">
+            <button
+              onClick={handleGoBack}
+              className="group inline-flex items-center text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition-all duration-200"
+            >
+              <div className="p-2 rounded-xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors mr-3">
+                <ArrowLeft className="w-4 h-4" />
+              </div>
+              <span className="font-medium">Back to Dashboard</span>
+            </button>
+            
+            <NotificationBell />
+          </div>
           <div className="text-left">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent mb-2">Bill Tracker</h1>
             <p className="text-slate-600 dark:text-slate-400 text-lg">Keep track of your household bills and payments</p>
@@ -245,6 +256,9 @@ export default function BillsPage() {
             </div>
           </div>
         </div>
+
+        {/* Quick Navigation */}
+        <QuickNavigation currentPage="bills" compact />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Bill Form */}

@@ -34,9 +34,9 @@ export async function GET(request: NextRequest) {
     // Connect to database AFTER token validation
     await connectDB();
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
-      logger.logAuth('chores_access_failed', decoded.id, false, {
+      logger.logAuth('chores_access_failed', decoded.userId, false, {
         reason: 'user_not_found',
         requestId
       });
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     // Connect to database AFTER token validation
     await connectDB();
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }

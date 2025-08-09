@@ -3,6 +3,7 @@ import connectDB from '@/lib/db';
 import Bill from '@/models/Bill';
 import { verifyToken } from '@/utils/jwt';
 import User from '@/models/User';
+import { logger } from '@/lib/logger';
 
 // PUT /api/bills/[id] - Update Bill
 export async function PUT(
@@ -19,7 +20,7 @@ export async function PUT(
     }
 
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }
@@ -39,7 +40,8 @@ export async function PUT(
       { ...body, updatedAt: new Date() },
       { new: true }
     );
-
+    logger.info('Succesfully updated Bill',updatedBill)
+    
     return NextResponse.json({ 
       message: 'Bill updated successfully',
       result: updatedBill 
@@ -65,8 +67,9 @@ export async function DELETE(
     }
 
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
+      logger.info("trying to delete but ... User not found")
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }
 
@@ -102,7 +105,7 @@ export async function GET(
     }
 
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 401 });
     }
