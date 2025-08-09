@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { User, Mail, MapPin, Lock, ArrowLeft, Camera, Globe, Bell, Palette, FileText, Edit3 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
+import LinkedInConnection from '@/components/LinkedInConnection';
 
 interface UserProfile {
   _id: string;
@@ -698,8 +699,15 @@ export default function ProfilePage() {
           )}
         </div>
 
+        {/* LinkedIn Integration */}
+        <LinkedInConnection onConnectionChange={(connected) => {
+          if (connected) {
+            setMessage('LinkedIn account connected successfully! You can now get personalized job recommendations.');
+          }
+        }} />
+
         {/* Change Password */}
-        <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl shadow-2xl shadow-slate-200/50 dark:shadow-slate-900/50 rounded-3xl p-8 border border-white/20 dark:border-slate-700/30">
+        <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl shadow-2xl shadow-slate-200/50 dark:shadow-slate-900/50 rounded-3xl p-8 mb-8 border border-white/20 dark:border-slate-700/30">
           <div className="flex items-center mb-8">
             <div className="p-3 bg-gradient-to-r from-red-500 to-pink-600 rounded-2xl mr-4">
               <Lock className="w-6 h-6 text-white" />
