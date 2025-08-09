@@ -61,12 +61,22 @@ export class LinkedInCredentialsService {
         const iv = Buffer.from(parts[0], 'hex');
         const encryptedData = parts[1];
         
-        const decipher = crypto.createDecipheriv('aes-256-cbc', encryptionKey, iv);
-        
-        let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-        
-        return decrypted;
+        // Handle both old (12-byte) and new (16-byte) IV formats
+        if (iv.length === 12) {
+          // Old format - use createDecipher (deprecated but needed for backward compatibility)
+          const decipher = crypto.createDecipher('aes-256-cbc', encryptionKey);
+          let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+          decrypted += decipher.final('utf8');
+          return decrypted;
+        } else if (iv.length === 16) {
+          // New format - use createDecipheriv
+          const decipher = crypto.createDecipheriv('aes-256-cbc', encryptionKey, iv);
+          let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+          decrypted += decipher.final('utf8');
+          return decrypted;
+        } else {
+          throw new Error('Invalid IV length - please re-enter LinkedIn credentials');
+        }
       }
       
       throw new Error('Invalid encrypted data format - please re-enter LinkedIn credentials');
