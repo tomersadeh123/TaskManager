@@ -44,6 +44,12 @@ export default function LinkedInConnection({ onConnectionChange }: LinkedInConne
         setIsConnected(data.result.isConnected);
         setProfile(data.result.profile);
         
+        // Check if credentials need updating
+        if (data.result.needsUpdate) {
+          setError(`⚠️ ${data.result.updateReason || 'Please re-enter your LinkedIn credentials'}`);
+          setIsConnected(false);
+        }
+        
         if (onConnectionChange) {
           onConnectionChange(data.result.isConnected);
         }

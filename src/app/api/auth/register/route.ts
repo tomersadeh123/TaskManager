@@ -4,12 +4,14 @@ import User from '@/models/User';
 import { signToken } from '@/utils/jwt';
 import userValidation from '@/lib/UserValidations';
 import { logger } from '@/lib/logger';
+import { withRateLimit, authRateLimit } from '@/middleware/rateLimiter';
 
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
-  const requestId = Math.random().toString(36).substr(2, 9);
-  
-  try {
+  return withRateLimit(request, authRateLimit, async () => {
+    const startTime = Date.now();
+    const requestId = Math.random().toString(36).substr(2, 9);
+    
+    try {
     // Log the request
     logger.logRequest(request, requestId);
     
@@ -90,5 +92,6 @@ export async function POST(request: NextRequest) {
       { message: 'Server error' },
       { status: 500 }
     );
-  }
+    }
+  });
 }
