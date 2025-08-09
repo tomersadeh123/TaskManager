@@ -1,0 +1,60 @@
+name: Automated Job Scraping
+
+on:
+  schedule:
+    # 10am Israel time (UTC+2 = 8am UTC)
+    - cron: '0 8 * * *'
+    # 4pm Israel time (UTC+2 = 2pm UTC) 
+    - cron: '0 14 * * *'
+  workflow_dispatch: # Allow manual triggering for testing
+
+jobs:
+  scrape-jobs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 🕒 Log Execution Time
+        run: |
+          echo "🚀 Starting scheduled job scraping..."
+          echo "Current UTC time: $(date -u)"
+          echo "Israel time (approx): $(TZ='Asia/Jerusalem' date)"
+      
+      - name: 🔍 Trigger Job Scraping
+        id: scrape
+        run: |
+          echo "Calling job scraping API..."
+          
+          response=$(curl -s -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.SYSTEM_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "${{ secrets.RENDER_APP_URL }}/api/jobs/scrape/system")
+          
+          http_code="${response: -3}"
+          body="${response%???}"
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Job scraping completed successfully"
+            echo "response_body=$body" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Job scraping failed with status $http_code"
+            echo "Error: $body"
+            exit 1
+          fi
+      
+      - name: 📊 Log Results
+        if: success()
+        run: |
+          echo "📈 Scraping Results:"
+          echo "${{ steps.scrape.outputs.response_body }}" | python3 -m json.tool || echo "Response was not valid JSON"
+          echo "✨ Scheduled job scraping completed successfully!"
+      
+      - name: 🚨 Handle Errors
+        if: failure()
+        run: |
+          echo "💥 Scheduled job scraping failed!"
+          echo "Please check your Render app logs for more details."
+          echo "Make sure SYSTEM_API_KEY and RENDER_APP_URL are correctly configured."
