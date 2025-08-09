@@ -22,6 +22,36 @@ const UserSchema = new mongoose.Schema({
     choreReminders: { type: Boolean, default: true },
     billReminders: { type: Boolean, default: true },
     groceryNotifications: { type: Boolean, default: true }
+  },
+  // LinkedIn Credentials Integration (User's own account)
+  linkedinAuth: {
+    isConnected: { type: Boolean, default: false },
+    email: String, // Encrypted LinkedIn email
+    password: String, // Encrypted LinkedIn password
+    connectedAt: Date, // When user added their LinkedIn credentials
+    lastLoginAt: Date, // Last successful LinkedIn login
+    loginStatus: { type: String, enum: ['active', 'expired', 'invalid', 'locked'], default: 'active' },
+    profileData: {
+      firstName: String,
+      lastName: String,
+      headline: String,
+      profilePicture: String,
+      location: String,
+      industry: String
+    }
+  },
+  // LinkedIn Job Search Preferences
+  linkedinJobPreferences: {
+    keywords: [{ type: String }], // Job search keywords
+    locations: [{ type: String }], // Preferred job locations
+    industries: [{ type: String }], // Preferred industries
+    experienceLevel: { type: String, enum: ['entry', 'associate', 'mid', 'senior', 'director', 'executive'] },
+    jobTypes: [{ type: String, enum: ['full-time', 'part-time', 'contract', 'temporary', 'internship'] }],
+    remoteWork: { type: Boolean, default: false },
+    salaryMin: Number,
+    salaryMax: Number,
+    companySize: [{ type: String, enum: ['startup', 'small', 'medium', 'large', 'enterprise'] }],
+    updatedAt: { type: Date, default: Date.now }
   }
 });
 

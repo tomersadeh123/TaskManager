@@ -2,6 +2,8 @@ import Job from '../models/Job';
 import User from '../models/User';
 import { emailJobReport } from './emailservice';
 import {logger} from "@/lib/logger";
+import { LinkedInCredentialsService } from './linkedinCredentialsService';
+import { LinkedInScraperService } from './linkedinScraperService';
 
 interface JobData {
   title: string;
@@ -14,6 +16,9 @@ interface JobData {
   description: string;
   searchKeyword: string;
   scrapedAt: Date;
+  // LinkedIn enhancement fields
+  linkedInEnhanced?: boolean;
+  matchScore?: number;
 }
 
 interface SearchConfig {
@@ -22,7 +27,114 @@ interface SearchConfig {
 }
 
 export class JobScraperService {
-  private userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  private userAgents = [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  ];
+  
+  private requestCount = 0;
+  private lastRequestTime = 0;
+
+  /**
+   * Get a random user agent to avoid detection
+   */
+  private getRandomUserAgent(): string {
+    return this.userAgents[Math.floor(Math.random() * this.userAgents.length)];
+  }
+
+  /**
+   * Smart rate limiting to avoid being blocked
+   */
+  private async rateLimitDelay(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    const minDelay = 1000; // 1 second minimum
+    const maxDelay = 3000; // 3 seconds maximum
+    
+    // Increase delay based on request count
+    const baseDelay = Math.min(maxDelay, minDelay + (this.requestCount * 100));
+    const randomDelay = baseDelay + Math.random() * 1000;
+    
+    if (timeSinceLastRequest < randomDelay) {
+      const delayTime = randomDelay - timeSinceLastRequest;
+      logger.info(`⏰ Rate limiting: waiting ${Math.round(delayTime)}ms`);
+      await new Promise(resolve => setTimeout(resolve, delayTime));
+    }
+    
+    this.lastRequestTime = Date.now();
+    this.requestCount++;
+  }
+
+  /**
+   * Enhanced HTTP request with retry logic and error handling
+   */
+  private async makeRequest(url: string, options: {
+    headers?: Record<string, string>;
+    maxRetries?: number;
+    retryDelay?: number;
+  } = {}): Promise<string | null> {
+    const { maxRetries = 3, retryDelay = 2000 } = options;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.rateLimitDelay();
+        
+        const headers = {
+          'User-Agent': this.getRandomUserAgent(),
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5,he;q=0.3',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Cache-Control': 'max-age=0',
+          ...options.headers
+        };
+
+        logger.info(`🌐 Request attempt ${attempt}/${maxRetries}: ${url}`);
+        
+        const response = await fetch(url, {
+          headers,
+          method: 'GET',
+        });
+
+        if (response.ok) {
+          const html = await response.text();
+          logger.info(`✅ Request successful: ${response.status} - ${html.length} chars`);
+          return html;
+        } else if (response.status === 429) {
+          // Rate limited - wait longer
+          logger.warn(`🚫 Rate limited (429), waiting longer before retry...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+          continue;
+        } else if (response.status >= 500) {
+          // Server error - retry
+          logger.warn(`🚫 Server error (${response.status}), retrying...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          continue;
+        } else {
+          logger.warn(`❌ Request failed: ${response.status} ${response.statusText}`);
+          return null;
+        }
+
+      } catch (error) {
+        logger.warn(`❌ Request error (attempt ${attempt}/${maxRetries}): ${error instanceof Error ? error.message : String(error)}`);
+        
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+          continue;
+        }
+      }
+    }
+    
+    logger.error(`💥 All ${maxRetries} attempts failed for: ${url}`);
+    return null;
+  }
 
   async scrapeJobsForUser(userId: string, searchConfig: SearchConfig): Promise<{ success: boolean; jobCount: number; error?: string }> {
     try {
@@ -33,19 +145,74 @@ export class JobScraperService {
         throw new Error('User not found');
       }
 
+      // Check if user has LinkedIn credentials and enhance search config
+      const hasLinkedInCredentials = await LinkedInCredentialsService.hasLinkedInCredentials(userId);
+      const enhancedSearchConfig = { ...searchConfig };
+
+      if (hasLinkedInCredentials) {
+        logger.info(`🔗 User has LinkedIn credentials, enhancing search with profile data`);
+        const linkedinProfile = await LinkedInCredentialsService.getLinkedInProfile(userId);
+        
+        if (linkedinProfile && user.linkedinJobPreferences) {
+          // Enhance search keywords with user preferences
+          if (user.linkedinJobPreferences.keywords && user.linkedinJobPreferences.keywords.length > 0) {
+            enhancedSearchConfig.linkedin = [
+              ...enhancedSearchConfig.linkedin,
+              ...user.linkedinJobPreferences.keywords.map((keyword: string) => `${keyword} ${linkedinProfile.location || 'Israel'}`)
+            ];
+            
+            // Also enhance Drushim searches
+            const additionalDrushimSearches = user.linkedinJobPreferences.keywords.map((keyword: string) => ({
+              position: keyword,
+              experience: this.mapExperienceLevelToYears(user.linkedinJobPreferences.experienceLevel || 'mid')
+            }));
+            enhancedSearchConfig.drushim = [...enhancedSearchConfig.drushim, ...additionalDrushimSearches];
+          }
+
+          // Add location-based searches if specified
+          if (user.linkedinJobPreferences.locations && user.linkedinJobPreferences.locations.length > 0) {
+            const locationSearches = user.linkedinJobPreferences.locations.flatMap((location: string) =>
+              enhancedSearchConfig.linkedin.map(keyword => `${keyword} ${location}`)
+            );
+            enhancedSearchConfig.linkedin = [...enhancedSearchConfig.linkedin, ...locationSearches];
+          }
+        }
+      }
+
       const allJobs: JobData[] = [];
 
       // Scrape Drushim jobs using HTTP requests
-      const drushimJobs = await this.scrapeDrushimJobs(searchConfig.drushim);
+      const drushimJobs = await this.scrapeDrushimJobs(enhancedSearchConfig.drushim);
       allJobs.push(...drushimJobs);
 
-      // Scrape LinkedIn jobs using HTTP requests (basic implementation)
-      const linkedinJobs = await this.scrapeLinkedInJobs(searchConfig.linkedin);
+      // Scrape LinkedIn jobs - use authenticated method if credentials available, otherwise fallback
+      let linkedinJobs: JobData[] = [];
+      if (hasLinkedInCredentials) {
+        logger.info('🔐 Using authenticated LinkedIn scraping with user credentials');
+        const authenticatedScraper = new LinkedInScraperService();
+        const authJobs = await authenticatedScraper.scrapeAuthenticatedLinkedInJobs(userId, enhancedSearchConfig.linkedin);
+        linkedinJobs = authJobs.map(job => ({ ...job, source: 'LinkedIn' as const }));
+      } else {
+        logger.info('🌐 Using public LinkedIn scraping (fallback)');
+        linkedinJobs = await this.scrapeLinkedInJobs(enhancedSearchConfig.linkedin);
+      }
       allJobs.push(...linkedinJobs);
 
       // Remove duplicates and sort jobs (same logic as original)
       const uniqueJobs = this.removeDuplicates(allJobs);
-      const sortedJobs = this.sortByDateAndSource(uniqueJobs);
+      
+      // Apply LinkedIn-based filtering if user has preferences
+      let filteredJobs = uniqueJobs;
+      if (hasLinkedInCredentials && user.linkedinJobPreferences) {
+        filteredJobs = this.filterJobsByPreferences(uniqueJobs, userId, user.linkedinJobPreferences);
+        logger.info(`🎯 Filtered jobs based on LinkedIn preferences: ${uniqueJobs.length} → ${filteredJobs.length}`);
+      }
+      
+      // Add LinkedIn insights
+      const enhancedJobs = await this.addLinkedInInsights(filteredJobs, userId);
+      
+      // Sort jobs (prioritize LinkedIn-enhanced jobs)
+      const sortedJobs = this.sortByDateAndSource(enhancedJobs);
 
       // Process and save jobs to database
       const newJobs = await this.saveJobsToDatabase(sortedJobs, userId);
@@ -85,23 +252,11 @@ export class JobScraperService {
         // This is a simplified version that gets public job listings
         const searchUrl = `https://www.linkedin.com/jobs/search?keywords=${encodeURIComponent(keyword)}&location=Israel&geoId=101620260&f_TPR=r604800&position=1&pageNum=0`;
         
-        const response = await fetch(searchUrl, {
-          headers: {
-            'User-Agent': this.userAgent,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-          }
-        });
-
-        if (!response.ok) {
-          logger.warn(`❌ Failed to fetch LinkedIn page for "${keyword}": ${response.status}`);
+        const html = await this.makeRequest(searchUrl);
+        if (!html) {
+          logger.warn(`❌ Failed to fetch LinkedIn page for "${keyword}"`);
           continue;
         }
-
-        const html = await response.text();
         const $ = cheerio.load(html);
 
         // LinkedIn job card selectors
@@ -150,8 +305,7 @@ export class JobScraperService {
           });
         }
 
-        // Add delay between requests
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Rate limiting is now handled by makeRequest method
 
       } catch (error) {
         logger.warn(`❌ LinkedIn error for "${keyword}": ${error}`);
@@ -178,23 +332,11 @@ export class JobScraperService {
 
         const searchUrl = `https://www.drushim.co.il/jobs/search/${encodeURIComponent(keyword)}/?experience=${encodeURIComponent(experience)}&ssaen=1`;
         
-        const response = await fetch(searchUrl, {
-          headers: {
-            'User-Agent': this.userAgent,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,he;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-          }
-        });
-
-        if (!response.ok) {
-          console.log(`❌ Failed to fetch Drushim page for "${keyword}": ${response.status}`);
+        const html = await this.makeRequest(searchUrl);
+        if (!html) {
+          console.log(`❌ Failed to fetch Drushim page for "${keyword}"`);
           continue;
         }
-
-        const html = await response.text();
         const $ = cheerio.load(html);
 
         // First try to extract from JSON data (like the working scraper)
@@ -241,8 +383,7 @@ export class JobScraperService {
           }
         }
 
-        // Add delay between requests
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Rate limiting is now handled by makeRequest method
 
       } catch (error) {
         console.log(`❌ Drushim error for "${searchParam.position}": ${error}`);
@@ -736,6 +877,234 @@ export class JobScraperService {
       .replace(/[""]/g, '"') // Normalize quote marks
       .trim()
       .slice(0, 1000); // Limit length for readability
+  }
+
+  /**
+   * Map LinkedIn experience level to years for Drushim searches
+   */
+  private mapExperienceLevelToYears(level: string): string {
+    const mapping: Record<string, string> = {
+      'entry': '0-2',
+      'associate': '2-4', 
+      'mid': '3-7',
+      'senior': '5-10',
+      'director': '8-15',
+      'executive': '10+'
+    };
+    return mapping[level] || '2-5';
+  }
+
+  /**
+   * Enhanced job filtering based on user LinkedIn preferences
+   */
+  private filterJobsByPreferences(jobs: JobData[], userId: string, preferences?: {
+    experienceLevel?: string;
+    jobTypes?: string[];
+    remoteWork?: boolean;
+    salaryMin?: number;
+    salaryMax?: number;
+    companySize?: string[];
+  }): JobData[] {
+    if (!preferences) return jobs;
+
+    return jobs.filter(job => {
+      // Filter by remote work preference
+      if (preferences.remoteWork !== undefined) {
+        const isRemote = job.title.toLowerCase().includes('remote') || 
+                        job.description.toLowerCase().includes('remote') ||
+                        job.location.toLowerCase().includes('remote');
+        if (preferences.remoteWork && !isRemote) return false;
+        if (!preferences.remoteWork && isRemote) return false;
+      }
+
+      // Filter by job types (full-time, part-time, etc.)
+      if (preferences.jobTypes && preferences.jobTypes.length > 0) {
+        const jobTypeMatch = preferences.jobTypes.some(type => {
+          const typeKeywords = {
+            'full-time': ['full-time', 'full time', 'פול-טיים', 'משרה מלאה'],
+            'part-time': ['part-time', 'part time', 'חלקית', 'משרה חלקית'],
+            'contract': ['contract', 'contractor', 'קבלן', 'חוזה'],
+            'temporary': ['temporary', 'temp', 'זמני'],
+            'internship': ['intern', 'internship', 'סטאז\'', 'התמחות']
+          };
+          
+          const keywords = typeKeywords[type as keyof typeof typeKeywords] || [type];
+          return keywords.some(keyword => 
+            job.title.toLowerCase().includes(keyword) || 
+            job.description.toLowerCase().includes(keyword)
+          );
+        });
+        
+        if (!jobTypeMatch) return false;
+      }
+
+      return true;
+    });
+  }
+
+  /**
+   * Add LinkedIn insights to job data
+   */
+  private async addLinkedInInsights(jobs: JobData[], userId: string): Promise<JobData[]> {
+    const hasLinkedInCredentials = await LinkedInCredentialsService.hasLinkedInCredentials(userId);
+    
+    if (!hasLinkedInCredentials) {
+      return jobs;
+    }
+
+    // Add LinkedIn-specific metadata to jobs
+    return jobs.map(job => ({
+      ...job,
+      // Add a flag to indicate this job was enhanced with LinkedIn data
+      linkedInEnhanced: true,
+      // Add matching score based on user profile (placeholder - would require more complex matching)
+      matchScore: this.calculateJobMatchScore(job)
+    }));
+  }
+
+  /**
+   * Calculate job matching score based on user profile
+   * (Simplified version - in production this would be more sophisticated)
+   */
+  private calculateJobMatchScore(job: JobData): number {
+    // Base score
+    let score = 50;
+    
+    // Boost score for recent postings
+    if (job.postingDays <= 1) score += 20;
+    else if (job.postingDays <= 7) score += 10;
+    
+    // Boost score for specific sources
+    if (job.source === 'LinkedIn') score += 15;
+    
+    // Boost score for detailed descriptions
+    if (job.description.length > 500) score += 10;
+    
+    return Math.min(100, Math.max(0, score));
+  }
+
+  /**
+   * Fallback search strategy when primary methods fail
+   */
+  private async fallbackJobSearch(searchConfig: SearchConfig): Promise<JobData[]> {
+    logger.info('🔄 Executing fallback job search strategy...');
+    const fallbackJobs: JobData[] = [];
+
+    // Future enhancement: could add more job sites
+    // const fallbackSources = [
+    //   { name: 'AllJobs.co.il', url: 'https://www.alljobs.co.il' },
+    //   { name: 'JobMaster.co.il', url: 'https://www.jobmaster.co.il' },
+    //   { name: 'Jobs.co.il', url: 'https://www.jobs.co.il' }
+    // ];
+
+    // For each LinkedIn keyword, try simpler searches
+    for (const keyword of searchConfig.linkedin.slice(0, 3)) { // Limit fallback searches
+      try {
+        logger.info(`🔍 Fallback search for: "${keyword}"`);
+        
+        // Try simplified keyword searches
+        const simplifiedKeywords = this.extractCoreKeywords(keyword);
+        
+        for (const simpleKeyword of simplifiedKeywords) {
+          // Try Drushim with simplified keyword
+          const drushimJobs = await this.scrapeDrushimJobs([{
+            position: simpleKeyword,
+            experience: '0-5'
+          }]);
+          
+          if (drushimJobs.length > 0) {
+            fallbackJobs.push(...drushimJobs.slice(0, 5)); // Limit results
+            logger.info(`✅ Fallback found ${drushimJobs.length} jobs for "${simpleKeyword}"`);
+          }
+          
+          // Don't overwhelm with too many requests
+          if (fallbackJobs.length >= 20) break;
+        }
+        
+        if (fallbackJobs.length >= 20) break;
+      } catch (error) {
+        logger.warn(`❌ Fallback search failed for "${keyword}": ${error}`);
+      }
+    }
+
+    return fallbackJobs;
+  }
+
+  /**
+   * Extract core keywords from complex search terms
+   */
+  private extractCoreKeywords(searchTerm: string): string[] {
+    // Remove location and common words
+    const cleanTerm = searchTerm
+      .replace(/\b(Israel|Tel Aviv|Jerusalem|Haifa|remote|מרוחק)\b/gi, '')
+      .replace(/\b(engineer|developer|manager|analyst|consultant)\b/gi, '$&') // Keep these
+      .trim();
+
+    const words = cleanTerm.split(/\s+/).filter(word => 
+      word.length > 2 && 
+      !['and', 'or', 'the', 'with', 'for'].includes(word.toLowerCase())
+    );
+
+    // Return original term and first meaningful word
+    return [cleanTerm, words[0]].filter(Boolean).slice(0, 2);
+  }
+
+  /**
+   * Enhanced scraping with recovery and fallback
+   */
+  async scrapeWithFallback(userId: string, searchConfig: SearchConfig): Promise<{ success: boolean; jobCount: number; error?: string; usedFallback?: boolean }> {
+    try {
+      // Reset request counters for new session
+      this.requestCount = 0;
+      this.lastRequestTime = 0;
+
+      // Try primary scraping method first
+      const primaryResult = await this.scrapeJobsForUser(userId, searchConfig);
+      
+      if (primaryResult.success && primaryResult.jobCount > 0) {
+        return primaryResult;
+      }
+
+      // If primary method failed or found no jobs, try fallback
+      logger.warn('🔄 Primary scraping yielded no results, trying fallback methods...');
+      
+      const fallbackJobs = await this.fallbackJobSearch(searchConfig);
+      
+      if (fallbackJobs.length > 0) {
+        // Process fallback jobs
+        const uniqueJobs = this.removeDuplicates(fallbackJobs);
+        const sortedJobs = this.sortByDateAndSource(uniqueJobs);
+        const newJobs = await this.saveJobsToDatabase(sortedJobs, userId);
+
+        // Send email notification
+        if (newJobs.length > 0) {
+          const user = await User.findById(userId);
+          if (user) {
+            await emailJobReport(user.email, user.userName, newJobs);
+          }
+        }
+
+        return {
+          success: true,
+          jobCount: newJobs.length,
+          usedFallback: true
+        };
+      }
+
+      return {
+        success: false,
+        jobCount: 0,
+        error: 'No jobs found with primary or fallback methods'
+      };
+
+    } catch (error) {
+      logger.error(`Fallback scraping failed: ${error}`);
+      return {
+        success: false,
+        jobCount: 0,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 }
 
