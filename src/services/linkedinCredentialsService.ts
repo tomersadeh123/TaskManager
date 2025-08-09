@@ -24,7 +24,7 @@ const getEncryptionKey = () => {
   // Use scrypt to derive a 32-byte key from the provided string
   return crypto.scryptSync(key, 'linkedin-salt', 32);
 };
-const IV_LENGTH = 12; // GCM uses 12-byte IV
+const IV_LENGTH = 16; // CBC uses 16-byte IV
 // const TAG_LENGTH = 16; // GCM authentication tag length - for future use
 
 export class LinkedInCredentialsService {
@@ -34,13 +34,13 @@ export class LinkedInCredentialsService {
   private static encrypt(text: string): string {
     try {
       const encryptionKey = getEncryptionKey();
-      const iv = crypto.randomBytes(IV_LENGTH);
-      const cipher = crypto.createCipher('aes-256-cbc', encryptionKey);
+      const iv = crypto.randomBytes(16); // Use 16 bytes for AES-256-CBC
+      const cipher = crypto.createCipheriv('aes-256-cbc', encryptionKey, iv);
       
       let encrypted = cipher.update(text, 'utf8', 'hex');
       encrypted += cipher.final('hex');
       
-      // Format: iv:encryptedData (simplified for compatibility)
+      // Format: iv:encryptedData
       return iv.toString('hex') + ':' + encrypted;
     } catch (error) {
       console.error('Encryption failed:', error);
@@ -61,7 +61,7 @@ export class LinkedInCredentialsService {
         const iv = Buffer.from(parts[0], 'hex');
         const encryptedData = parts[1];
         
-        const decipher = crypto.createDecipher('aes-256-cbc', encryptionKey);
+        const decipher = crypto.createDecipheriv('aes-256-cbc', encryptionKey, iv);
         
         let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
         decrypted += decipher.final('utf8');
