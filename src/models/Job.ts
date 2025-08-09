@@ -15,6 +15,8 @@ export interface IJob extends Document {
   appliedBy?: Types.ObjectId; // Reference to User who applied
   appliedDate?: Date;
   isApplied: boolean;
+  isDeleted: boolean;
+  deletedDate?: Date;
   user: Types.ObjectId; // User who this job belongs to
   createdAt: Date;
   updatedAt: Date;
@@ -87,6 +89,14 @@ const JobSchema: Schema = new Schema({
     type: Boolean,
     default: false
   },
+  isDeleted: {
+    type: Boolean,
+    default: false
+  },
+  deletedDate: {
+    type: Date,
+    default: null
+  },
   user: {
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -101,6 +111,7 @@ const JobSchema: Schema = new Schema({
 // Indexes for better performance
 JobSchema.index({ user: 1, scrapedAt: -1 });
 JobSchema.index({ user: 1, isApplied: 1 });
+JobSchema.index({ user: 1, isDeleted: 1 });
 JobSchema.index({ user: 1, source: 1 });
 JobSchema.index({ user: 1, postingDays: 1 });
 JobSchema.index({ title: 1, company: 1, user: 1 }, { unique: true }); // Prevent duplicates per user
@@ -125,7 +136,7 @@ JobSchema.virtual('applicationStatus').get(function(this: IJob) {
 // Static method to get jobs stats for a user
 JobSchema.statics.getJobsStats = async function(userId: string) {
   const stats = await this.aggregate([
-    { $match: { user: new mongoose.Types.ObjectId(userId) } },
+    { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: { $ne: true } } },
     {
       $group: {
         _id: null,
@@ -149,7 +160,7 @@ JobSchema.statics.getJobsStats = async function(userId: string) {
 
 // Static method to get recent jobs for a user
 JobSchema.statics.getRecentJobs = async function(userId: string, limit = 10) {
-  return await this.find({ user: userId })
+  return await this.find({ user: userId, isDeleted: { $ne: true } })
     .sort({ scrapedAt: -1 })
     .limit(limit)
     .populate('user', 'userName email');
@@ -159,7 +170,8 @@ JobSchema.statics.getRecentJobs = async function(userId: string, limit = 10) {
 JobSchema.statics.getUnappliedJobs = async function(userId: string) {
   return await this.find({ 
     user: userId, 
-    isApplied: false 
+    isApplied: false,
+    isDeleted: { $ne: true }
   })
     .sort({ postingDays: 1, scrapedAt: -1 })
     .populate('user', 'userName email');

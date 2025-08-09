@@ -113,7 +113,7 @@ export class JobScraperService {
 
   async scrapeJobsForUser(userId: string, searchConfig: SearchConfig): Promise<{ success: boolean; jobCount: number; error?: string }> {
     try {
-      console.log('🚀 Starting lightweight job scraping...');
+      logger.info('Job scraping session started', { userId, searchConfigSize: { linkedin: searchConfig.linkedin.length, drushim: searchConfig.drushim.length } });
       
       const user = await User.findById(userId);
       if (!user) {
@@ -203,7 +203,7 @@ export class JobScraperService {
       };
 
     } catch (error) {
-      console.error('Job scraping failed:', error);
+      logger.error('Job scraping session failed', error as Error, { userId, searchConfig });
       return {
         success: false,
         jobCount: 0,
@@ -292,7 +292,7 @@ export class JobScraperService {
   }
 
   private async scrapeDrushimJobs(searchParams: Array<{ position: string; experience: string }>): Promise<JobData[]> {
-    console.log('🇮🇱 Scraping Drushim jobs with HTTP requests...');
+    logger.info('Started Drushim job scraping', { searchParamsCount: searchParams.length });
     const jobs: JobData[] = [];
 
     // Load cheerio dynamically
@@ -302,14 +302,13 @@ export class JobScraperService {
       try {
         const keyword = searchParam.position;
         const experience = searchParam.experience;
-        
-        console.log(`🔍 Drushim search: "${keyword}" (${experience} years experience)`);
-
         const searchUrl = `https://www.drushim.co.il/jobs/search/${encodeURIComponent(keyword)}/?experience=${encodeURIComponent(experience)}&ssaen=1`;
+        
+        logger.info('Drushim search initiated', { keyword, experience, searchUrl });
         
         const html = await this.makeRequest(searchUrl);
         if (!html) {
-          console.log(`❌ Failed to fetch Drushim page for "${keyword}"`);
+          logger.warn('Drushim page fetch failed', { keyword, experience, searchUrl });
           continue;
         }
         const $ = cheerio.load(html);
@@ -317,7 +316,7 @@ export class JobScraperService {
         // First try to extract from JSON data (like the working scraper)
         const jsonJobs = this.extractDrushimJsonData(html);
         if (jsonJobs.length > 0) {
-          console.log(`✅ Found ${jsonJobs.length} Drushim jobs from JSON data`);
+          logger.info('Drushim JSON jobs extracted', { keyword, experience, jobCount: jsonJobs.length, extractionMethod: 'JSON' });
           
           for (const jsonJob of jsonJobs.slice(0, 15)) {
             const jobData = this.parseDrushimJsonJob(jsonJob, `${keyword} (${experience} years)`);
@@ -354,18 +353,18 @@ export class JobScraperService {
             const keywordJobs = this.extractDrushimJobsFromHTML($, jobCards, `${keyword} (${experience} years)`);
             jobs.push(...keywordJobs);
           } else {
-            console.log(`⚠️ No job cards found for "${keyword}"`);
+            logger.warn('No Drushim job cards found', { keyword, experience, extractionMethod: 'HTML' });
           }
         }
 
         // Rate limiting is now handled by makeRequest method
 
       } catch (error) {
-        console.log(`❌ Drushim error for "${searchParam.position}": ${error}`);
+        logger.error('Drushim search failed', error as Error, { position: searchParam.position, experience: searchParam.experience });
       }
     }
 
-    console.log(`📊 Drushim total: ${jobs.length} jobs`);
+    logger.info('Drushim scraping completed', { totalJobs: jobs.length, searchParamsProcessed: searchParams.length });
     return jobs;
   }
 
@@ -498,7 +497,7 @@ export class JobScraperService {
       }
 
     } catch (error) {
-      console.log('Error parsing Drushim JSON job:', error);
+      logger.warn('Drushim JSON job parsing failed', { error: (error as Error).message, keyword });
     }
     
     return null;
@@ -535,12 +534,12 @@ export class JobScraperService {
           
           if (jobData.title && jobData.company) {
             jobs.push(jobData);
-            console.log(`✅ HTML: ${jobData.title} at ${jobData.company} (${jobData.postingDate})`);
+            logger.info('Drushim HTML job extracted', { title: jobData.title, company: jobData.company, postingDate: jobData.postingDate, keyword });
           }
         }
 
       } catch (error) {
-        console.log(`❌ Error extracting Drushim job ${i}:`, error);
+        logger.warn('Drushim HTML job extraction failed', { jobIndex: i, error: (error as Error).message, keyword });
       }
     });
 
@@ -625,7 +624,7 @@ export class JobScraperService {
       }
 
     } catch (error) {
-      console.log('Error parsing Drushim job data:', error);
+      logger.warn('Drushim job data parsing failed', { error: (error as Error).message, keyword });
     }
     
     return null;
@@ -703,12 +702,17 @@ export class JobScraperService {
 
     for (const jobData of jobs) {
       try {
-        // Check if job already exists for this user
+        // Check if job already exists for this user (including deleted ones)
         const existingJob = await Job.findOne({
           title: jobData.title,
           company: jobData.company,
           user: userId
         });
+
+        if (existingJob && existingJob.isDeleted) {
+          logger.info(`⏭️ Skipping deleted job: ${jobData.title} at ${jobData.company}`);
+          continue; // Skip this job - user deleted it before
+        }
 
         if (!existingJob) {
           await Job.create({
@@ -718,11 +722,11 @@ export class JobScraperService {
           newJobs.push(jobData);
         }
       } catch (error) {
-        console.error('Error saving job:', error);
+        logger.error('Job save operation failed', error as Error, { jobTitle: jobData.title, jobCompany: jobData.company, userId });
       }
     }
 
-    console.log(`💾 Saved ${newJobs.length} new jobs to database`);
+    logger.info('Job database save completed', { newJobCount: newJobs.length, totalJobsProcessed: jobs.length, userId });
     return newJobs;
   }
 
@@ -834,7 +838,7 @@ export class JobScraperService {
         seen.set(key, true);
         unique.push(job);
       } else {
-        console.log(`⚠️ Removing duplicate: ${job.title} at ${job.company} (from ${job.source})`);
+        logger.info('Duplicate job removed', { title: job.title, company: job.company, source: job.source });
       }
     }
 
@@ -842,7 +846,7 @@ export class JobScraperService {
   }
 
   sortByDateAndSource(jobs: JobData[]): JobData[] {
-    console.log('📅 Sorting jobs by date (newest first) and source...');
+    logger.info('Sorting jobs by posting date and source', { jobCount: jobs.length });
 
     return jobs.sort((a, b) => {
       // Sort by posting date first (newest first)

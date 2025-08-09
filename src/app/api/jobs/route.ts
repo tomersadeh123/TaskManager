@@ -3,6 +3,7 @@ import connectDB from '@/lib/db';
 import Job from '@/models/Job';
 import User from '@/models/User';
 import jwt from 'jsonwebtoken';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(url.searchParams.get('limit') || '20');
     const page = parseInt(url.searchParams.get('page') || '1');
 
-    const query: Record<string, unknown> = { user: user._id };
+    const query: Record<string, unknown> = { user: user._id, isDeleted: { $ne: true } };
 
     // Apply filters
     if (filter === 'applied') {
@@ -72,11 +73,11 @@ export async function GET(request: NextRequest) {
 
     // Get job statistics
     const stats = {
-      totalJobs: await Job.countDocuments({ user: user._id }),
-      appliedJobs: await Job.countDocuments({ user: user._id, isApplied: true }),
-      newJobs: await Job.countDocuments({ user: user._id, postingDays: { $lte: 3 } }),
-      linkedinJobs: await Job.countDocuments({ user: user._id, source: 'LinkedIn' }),
-      drushimJobs: await Job.countDocuments({ user: user._id, source: 'Drushim.il' })
+      totalJobs: await Job.countDocuments({ user: user._id, isDeleted: { $ne: true } }),
+      appliedJobs: await Job.countDocuments({ user: user._id, isApplied: true, isDeleted: { $ne: true } }),
+      newJobs: await Job.countDocuments({ user: user._id, postingDays: { $lte: 3 }, isDeleted: { $ne: true } }),
+      linkedinJobs: await Job.countDocuments({ user: user._id, source: 'LinkedIn', isDeleted: { $ne: true } }),
+      drushimJobs: await Job.countDocuments({ user: user._id, source: 'Drushim.il', isDeleted: { $ne: true } })
     };
 
     return NextResponse.json({
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error fetching jobs:', error);
+    logger.error('Jobs API fetch failed', error as Error);
     return NextResponse.json(
       { success: false, message: 'Failed to fetch jobs' },
       { status: 500 }
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if job already exists for this user
+    // Check if job already exists for this user (including deleted ones)
     const existingJob = await Job.findOne({
       title,
       company,
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error adding job:', error);
+    logger.error('Jobs API manual add failed', error as Error);
     return NextResponse.json(
       { success: false, message: 'Failed to add job' },
       { status: 500 }

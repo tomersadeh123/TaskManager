@@ -3,6 +3,7 @@ import connectDB from '@/lib/db';
 import Job from '@/models/Job';
 import User from '@/models/User';
 import jwt from 'jsonwebtoken';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -84,7 +85,7 @@ export async function PUT(
     });
 
   } catch (error) {
-    console.error('Error updating job:', error);
+    logger.error('Job update API failed', error as Error);
     return NextResponse.json(
       { success: false, message: 'Failed to update job' },
       { status: 500 }
@@ -111,11 +112,19 @@ export async function DELETE(
     const resolvedParams = await params;
     const jobId = resolvedParams.id;
 
-    // Find and delete job, verify ownership
-    const deletedJob = await Job.findOneAndDelete({ 
-      _id: jobId, 
-      user: user._id 
-    });
+    // Find and soft delete job, verify ownership
+    const deletedJob = await Job.findOneAndUpdate(
+      { 
+        _id: jobId, 
+        user: user._id,
+        isDeleted: { $ne: true } // Only delete if not already deleted
+      },
+      {
+        isDeleted: true,
+        deletedDate: new Date()
+      },
+      { new: true }
+    );
 
     if (!deletedJob) {
       return NextResponse.json(
@@ -124,13 +133,21 @@ export async function DELETE(
       );
     }
 
+    logger.info('Job soft deleted successfully', {
+      userId: user._id,
+      userName: user.userName,
+      jobId,
+      jobTitle: deletedJob.title,
+      jobCompany: deletedJob.company
+    });
+
     return NextResponse.json({
       success: true,
       message: 'Job deleted successfully'
     });
 
   } catch (error) {
-    console.error('Error deleting job:', error);
+    logger.error('Job soft delete API failed', error as Error);
     return NextResponse.json(
       { success: false, message: 'Failed to delete job' },
       { status: 500 }
@@ -175,7 +192,7 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('Error fetching job:', error);
+    logger.error('Single job fetch API failed', error as Error);
     return NextResponse.json(
       { success: false, message: 'Failed to fetch job' },
       { status: 500 }
